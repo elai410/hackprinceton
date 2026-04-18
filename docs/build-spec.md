@@ -461,10 +461,62 @@ Phases **A–B** ≈ **Milestone 1**; **C** ≈ **Milestone 2**; **D** ≈ **Mil
 
 ### Phase C — Real adapter (Adeept)
 
-- Replace mock with **adapter** calling real control path; keep **same** `POST /execute` contract.
-- Manifest lists only **implemented** skills; executor enforces **timeouts** between steps.
-- **Runbook** in repo: connection, estop, first smoke test command.
+- Replace mock with **`AdeeptAdapter`** (`companion/companion/adapters/adeept.py`) calling the real control path; keep **same** `POST /execute` contract.
+- Manifest (`examples/manifest.adeept.json`, `manifest_id: adeept_5dof_v2`) lists only **implemented** skills; executor enforces **timeouts** between steps.
+- **Runbook** in repo: see [README → Hardware bring-up](../README.md#hardware-bring-up-adeept-ada031-5-dof) for CH340 driver, firmware flash, port discovery, power-on order, and smoke test.
 - **Exit:** script-sent plan moves arm; disconnect handled safely.
+
+#### Wire protocol (vendor firmware `block_py.ino`)
+
+- USB-serial @ **115200 baud**, line-delimited ASCII.
+- Each command is one JSON line: `{"start":["<cmd>", arg1, arg2, ...]}\n`.
+- Firmware buffer is `char line[60]` → adapter MUST refuse any line **> 59 bytes** (excluding the trailing `\n`).
+- Numeric args are read as `long`; the adapter sends `int(round(angle))` only — never floats.
+- Arduino auto-resets when the host opens the serial port (DTR toggle). Sequence on init: `serial.Serial(...)` → `time.sleep(ADEEPT_OPEN_RESET_S)` (default `2.0`) → `reset_input_buffer()` → bounded handshake retry (`{"start":["setup"]}` until firmware echoes anything, or `ADEEPT_HANDSHAKE_TIMEOUT_S` elapses).
+
+#### Pin map and joint ranges
+
+| Servo idx | Joint | Arduino pin | Range (deg) | Home |
+| :--- | :--- | :--- | :--- | :--- |
+| 0 | base yaw | 9 | 0–180 | 90 |
+| 1 | shoulder | 6 | 0–180 | 90 |
+| 2 | elbow | 5 | 0–180 | 90 |
+| 3 | wrist | 3 | 0–180 | 90 |
+| 4 | gripper | 11 | **30–100** (clamped) | 65 |
+
+These are hardware constants — kept inside `adeept.py` as `PIN_MAP`, `JOINT_RANGES`, `HOME_ANGLES`. Do **not** move them to settings.
+
+#### Skill → serial mapping
+
+| Skill (manifest id) | Adapter behaviour | Serial commands |
+| :--- | :--- | :--- |
+| `go_home` | `_move_to(HOME_ANGLES)` | `servo_write(i, HOME_ANGLES[i])` per changed joint, interpolated at `ADEEPT_INTERP_HZ` |
+| `set_joint_angle` | clamp to per-joint range, `_move_to` | `servo_write(i, angle)` |
+| `pan_left` / `pan_right` | adjust `cur[0]` ± `degrees`, `_move_to` | `servo_write(0, ...)` per tick |
+| `tilt_up` / `tilt_down` | adjust `cur[1]` ∓ `degrees`, `_move_to` | `servo_write(1, ...)` per tick |
+| `grip_open` | `cur[4] = 100`, `_move_to` | `servo_write(4, 100)` |
+| `grip_close` | `cur[4] = round(65 − (force_pct − 10) · 35/90)` | `servo_write(4, ...)` |
+| `wave` | for each repetition, alternate shoulder 70 ↔ 110, then home | series of `servo_write(1, ...)` |
+| `oled_text` | lazy-init OLED (`OLED_init`, `OLED_Ts(2)`) once; truncate text to 20 chars | `OLED_Clear`, `OLED_Cursor(0,0)`, `OLED_Show("...")` |
+
+Truncation in `oled_text` is a **backstop** — the validator does not currently enforce JSON-Schema `maxLength`, so the adapter must defend.
+
+#### Threading and lifecycle
+
+- `/execute` runs the adapter inside FastAPI's threadpool while `BindingDispatcher` calls it via `asyncio.to_thread`. Serial is **not** thread-safe → every `_send` and `_handshake` write is wrapped in `self._lock = threading.Lock()`.
+- `execute_skill_call` MUST NOT raise (Protocol contract in `adapters/base.py`). The implementation wraps `_dispatch` in a single try/except → `StepResult(status="failed", detail=str(exc))`.
+- `close()` is called from `main.py` lifespan shutdown; it acquires the lock and closes the port if open.
+
+#### Configuration
+
+| Var | Default | Purpose |
+| :--- | :--- | :--- |
+| `ADEEPT_PORT` | *(unset)* | Serial device. Required when `ADAPTER=adeept`; missing → adapter raises, factory falls back to mock with a warning log. |
+| `ADEEPT_BAUD` | `115200` | Matches firmware. |
+| `ADEEPT_INTERP_HZ` | `50` | Sub-step rate for `_move_to`. |
+| `ADEEPT_MAX_SPEED_DEG_S` | `60.0` | Per-joint angular speed cap. |
+| `ADEEPT_OPEN_RESET_S` | `2.0` | Sleep after `Serial.open()` for MCU bootloader. |
+| `ADEEPT_HANDSHAKE_TIMEOUT_S` | `8.0` | Bound on the `setup` retry loop. |
 
 ### Phase D — Browser client
 

@@ -1,28 +1,28 @@
 {
-  "manifest_id": "adeept_5dof_v1",
+  "manifest_id": "adeept_5dof_v2",
   "robot_label": "Adeept 5 DOF",
   "skills": [
     {
       "id": "go_home",
       "display_name": "Go to home pose",
-      "description": "Move all joints to the known safe home configuration.",
+      "description": "Move all joints to the known safe home configuration (all joints at 90\u00b0 except gripper at 65\u00b0).",
       "parameters": {},
       "constraints": {}
     },
     {
       "id": "set_joint_angle",
       "display_name": "Set joint angle",
-      "description": "Set a single joint to a target angle in degrees. Joint 0 is the base rotation, joints 1-3 are arm segments, joint 4 is the wrist.",
+      "description": "Set a single joint to a target angle in degrees (0=min, 180=max). Joint 0 base yaw, 1 shoulder, 2 elbow, 3 wrist, 4 gripper. Joint 4 (gripper) is internally clamped to 30-100\u00b0.",
       "parameters": {
         "joint_index": { "type": "integer", "minimum": 0, "maximum": 4 },
-        "angle_deg": { "type": "number", "minimum": -90, "maximum": 90 }
+        "angle_deg": { "type": "number", "minimum": 0, "maximum": 180 }
       },
-      "constraints": { "max_speed_deg_s": 30 }
+      "constraints": { "max_speed_deg_s": 60 }
     },
     {
       "id": "wave",
       "display_name": "Wave greeting",
-      "description": "Perform a gentle waving motion using the upper arm joints.",
+      "description": "Perform a gentle waving motion using the shoulder joint. The repetitions argument is required and controls how many full back-and-forth swings to perform.",
       "parameters": {
         "repetitions": { "type": "integer", "minimum": 1, "maximum": 5 }
       },
@@ -38,7 +38,7 @@
     {
       "id": "grip_close",
       "display_name": "Close gripper",
-      "description": "Close the end effector gripper to grip an object.",
+      "description": "Close the end effector gripper to grip an object. Higher force_pct means a tighter grip.",
       "parameters": {
         "force_pct": { "type": "integer", "minimum": 10, "maximum": 100 }
       },
@@ -47,7 +47,7 @@
     {
       "id": "pan_left",
       "display_name": "Pan left",
-      "description": "Rotate the base joint to the left by a given number of degrees.",
+      "description": "Rotate the base joint to the left by a given number of degrees from the current pose.",
       "parameters": {
         "degrees": { "type": "number", "minimum": 1, "maximum": 90 }
       },
@@ -56,7 +56,7 @@
     {
       "id": "pan_right",
       "display_name": "Pan right",
-      "description": "Rotate the base joint to the right by a given number of degrees.",
+      "description": "Rotate the base joint to the right by a given number of degrees from the current pose.",
       "parameters": {
         "degrees": { "type": "number", "minimum": 1, "maximum": 90 }
       },
@@ -65,7 +65,7 @@
     {
       "id": "tilt_up",
       "display_name": "Tilt up",
-      "description": "Tilt the arm upward by raising joint 1.",
+      "description": "Tilt the arm upward by raising the shoulder joint by a given number of degrees from the current pose.",
       "parameters": {
         "degrees": { "type": "number", "minimum": 1, "maximum": 45 }
       },
@@ -74,9 +74,18 @@
     {
       "id": "tilt_down",
       "display_name": "Tilt down",
-      "description": "Tilt the arm downward by lowering joint 1.",
+      "description": "Tilt the arm downward by lowering the shoulder joint by a given number of degrees from the current pose.",
       "parameters": {
         "degrees": { "type": "number", "minimum": 1, "maximum": 45 }
+      },
+      "constraints": {}
+    },
+    {
+      "id": "oled_text",
+      "display_name": "Show OLED text",
+      "description": "Display short text on the arm's OLED screen (max 20 characters; longer strings are truncated).",
+      "parameters": {
+        "text": { "type": "string", "maxLength": 20 }
       },
       "constraints": {}
     }

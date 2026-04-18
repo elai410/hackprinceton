@@ -33,7 +33,57 @@ npm run dev    # → http://127.0.0.1:5173
 
 ### 3. Real arm (Phase C)
 
-Set `ADAPTER=adeept` in `.env` and connect the USB cable. Fill in the serial port and SDK calls in `companion/companion/adapters/adeept.py`.
+Set `ADAPTER=adeept` in `.env`, fill in `ADEEPT_PORT`, and follow **Hardware bring-up** below.
+
+---
+
+## Hardware bring-up (Adeept ADA031 5 DOF)
+
+One-time setup before the `adeept` adapter can talk to the arm.
+
+1. **Install the CH340 USB-serial driver.** macOS pkg lives at
+   `docs/ADA031-Adeept_Robotic_Arm_Kit_for_Arduino-V4.0-20251205/Software Package/Adeept driver/CH341SER_MAC.ZIP`
+   (Windows / Linux variants are in the same folder). Reboot if the installer asks.
+2. **Install the bundled Arduino libraries** from
+   `docs/ADA031-.../Software Package/libraries/` into your Arduino IDE
+   (`ArduinoJson`, `Servo`, `SSD1306Ascii`).
+3. **Flash the firmware.** Open
+   `docs/ADA031-.../Software Package/block_py/block_py.ino`
+   in the Arduino IDE, select board "Arduino Uno" @ 115200 baud, and upload.
+4. **Identify the serial port** and set `ADEEPT_PORT` in `.env`:
+   - macOS: `ls /dev/tty.usbserial-*`
+   - Linux: `ls /dev/ttyUSB*` (you may need `sudo usermod -aG dialout $USER` then re-login)
+   - Windows: Device Manager → Ports (COM & LPT) → e.g. `COM3`
+5. **Power-on order matters.** Plug in the **12 V supply first**, then the USB
+   cable. Powering servos from USB alone causes brown-outs under load.
+6. **Switch the adapter and restart** the companion:
+
+   ```bash
+   # in .env
+   ADAPTER=adeept
+   ADEEPT_PORT=/dev/tty.usbserial-1410   # whatever step 4 found
+   ```
+
+7. **Smoke test:**
+
+   ```bash
+   curl -s localhost:8000/health | jq                 # adapter: "adeept"
+   curl -s -X POST localhost:8000/execute \
+     -H 'content-type: application/json' \
+     -d '{"plan":{"steps":[
+       {"skill_id":"go_home","arguments":{}},
+       {"skill_id":"wave","arguments":{"repetitions":2}},
+       {"skill_id":"oled_text","arguments":{"text":"hello rewire"}}
+     ]}}' | jq
+   ```
+
+   Expected: arm returns to home, waves twice on the shoulder joint, OLED
+   shows "hello rewire", and the response trace reports `status: "completed"`
+   per step.
+
+If the adapter cannot open the port (missing `ADEEPT_PORT`, wrong device,
+firmware not flashed) the companion logs a warning and falls back to the
+mock adapter so the rest of the stack still boots.
 
 ---
 

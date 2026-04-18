@@ -17,7 +17,10 @@ def get_adapter(settings: Settings, manifest: Manifest) -> RobotAdapter:
     if settings.ADAPTER == "adeept":
         try:
             from companion.adapters.adeept import AdeeptAdapter
-            return AdeeptAdapter(manifest_id=manifest.manifest_id)
+            return AdeeptAdapter(
+                manifest_id=manifest.manifest_id,
+                settings=settings,
+            )
         except Exception as exc:
             logger.warning(
                 f"AdeeptAdapter failed to initialise ({exc}); "

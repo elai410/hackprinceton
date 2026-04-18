@@ -102,6 +102,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     for ia in input_adapters:
         ia.stop()
 
+    close_fn = getattr(adapter, "close", None)
+    if callable(close_fn):
+        try:
+            close_fn()
+        except Exception:
+            logger.warning("adapter.close() failed", exc_info=True)
+
     logger.info("Companion shutdown complete")
 
 
