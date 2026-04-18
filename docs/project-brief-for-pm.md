@@ -15,6 +15,26 @@
 | **Planner models** | **K2 (sponsor) as primary** reasoning/planner backend; **other hosted models** as automatic fallback if K2 errors, rate-limits, or times out. **Offline:** rehearsed **cached `Plan` JSON** if all APIs fail. |
 | **Planning UX** | **Clarify before acting:** model may ask **short, user-facing questions** in plain language when intent is ambiguous—**without** showing raw manifest, skill IDs, or schema to the user. **Reasoning visible:** show an **explanation stream** (what the assistant is considering / why) during planning; final execution still uses **validated** `Plan` JSON only. |
 
+### Key terms (see build spec)
+
+Full definitions: [build-spec.md — Key terms and components](build-spec.md#key-terms-and-components).
+
+| Term | In one phrase |
+| :--- | :--- |
+| **Manifest** | What the robot is allowed to do (skills, limits, descriptions)—written by us. |
+| **Skill** | One named action in the manifest (e.g. move a joint). |
+| **SkillCall** | One concrete use of a skill with arguments. |
+| **Plan** | Ordered list of skill calls the system will run after validation. |
+| **Validator** | Code that rejects bad plans before the arm moves. |
+| **Companion** | Laptop service that talks to the browser and the arm adapter. |
+| **Robot adapter** | Translates skill calls into real hardware commands. |
+| **Mock adapter** | Fake arm: same rules, logs only—no motors. |
+| **Input adapter** | Turns mic/clap/etc. into events—not for moving joints. |
+| **InputEvent** | One normalized sensor event (type, payload, time). |
+| **TriggerRule** | Optional: map events to a plan or template. |
+| **Planner** | Turns English (+ manifest) into a plan (K2 + fallbacks). |
+| **Execution trace** | Step-by-step log shown in the UI during/after a run. |
+
 ## One-sentence pitch
 
 End users personalize **how** they control robots and **what** those interactions mean—starting in **natural language** every time, with optional **block-style refinement** of the skill-call list when scope allows—while the system only runs **capabilities the robot already exposes**, via a **manifest** and **adapter** model so new hardware can be onboarded without rebuilding the product.

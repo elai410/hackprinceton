@@ -2,12 +2,14 @@
 
 Technical source of truth for architecture and contracts unless superseded by checked-in schemas and code.
 
+**Agents:** Implement using **§ Implementation defaults** and **§ JSON contracts** below. Do not substitute other frameworks or API shapes unless the human explicitly approves a deviation.
+
 ## Platform decisions (locked for this project)
 
 | Topic | Decision |
 | :--- | :--- |
 | **Robot** | **Adeept 5 DOF** — reference hardware for manifest + adapter. |
-| **Client (MVP)** | **Laptop + browser** (or minimal desktop UI): **typed NL** and/or **Web Speech API** / desktop mic. Primary integration target until the pipeline is stable. |
+| **Client (MVP)** | **Laptop + browser** (or minimal desktop shell): **typed NL** and/or **Web Speech API** / desktop mic. Primary integration target until the pipeline is stable. |
 | **Client (stretch)** | **Native mobile app** on LAN + **on-device STT** — only after MVP works. |
 | **Design flow** | **Natural language first** for every new behavior or revision. |
 | **MVP vs stretch** | **MVP:** NL → `Plan` → validate → **read-only block list** (preview + execution trace) → execute. **Stretch:** (1) **same block list component** with **editing** enabled; (2) mobile client. |
@@ -23,7 +25,7 @@ Technical source of truth for architecture and contracts unless superseded by ch
 - **Companion service** is the only component that talks to motors on the default architecture.  
 - **Input events** (clap, etc.) normalized; triggers bind to plans where in scope.  
 - **New robots:** new manifest + adapter behind the same companion contract.  
-- Preview via **trace / dry-run** (mock adapter or explicit **`/execute/dry-run`**)—**not** a required 3D or physics simulation; no mandatory sim.
+- Preview via **trace / dry-run** (`POST /execute` with **`"dry_run": true`** or **`ADAPTER=mock`**)—**not** a required 3D or physics simulation; no mandatory sim.
 
 ## Architecture
 
@@ -44,11 +46,326 @@ Technical source of truth for architecture and contracts unless superseded by ch
 
 **Preferred for secrets:** Run planner **on the companion** so the browser/mobile client only sends **plain text** to one IP; API keys stay on the laptop.
 
+## Implementation defaults (use unless human overrides)
+
+These choices remove guesswork for the first vertical slice; the human may swap pieces later.
+
+| Area | Default |
+| :--- | :--- |
+| **Companion runtime** | **Python 3.11+** |
+| **Companion framework** | **FastAPI** + **Uvicorn** |
+| **Request/response models** | **Pydantic v2** (aligns with JSON below) |
+| **Config** | **`pydantic-settings`** reading **environment variables** (see § Environment variables) |
+| **HTTP** | **JSON** over HTTP/1.1; **no WebSocket required** for MVP. Optional **SSE** for `/plan` reasoning via `StreamingResponse`. |
+| **CORS** | Enable **CORS** for `http://localhost:*` and `http://127.0.0.1:*` in dev; restrict to known web origin in demo. |
+| **Browser client** | **Vite** + **TypeScript** minimal SPA (or static `index.html` + one `app.ts` if speed-critical). **No** framework required beyond what serves the MVP UI. |
+| **Package layout** | Monorepo-style: **`companion/`** (Python package), **`web/`** (front-end), **`schemas/`** (JSON Schema copies optional), **`examples/`** (fixtures). |
+| **Process model** | **Single** companion process: validator + execute + planner in-process. **No** separate planner microservice for MVP. |
+| **Adapter selection** | **`ADAPTER=mock`** or **`ADAPTER=adeept`** (env). Mock is default until hardware works. |
+| **Time** | Store UTC **ISO 8601** strings in traces and events. |
+
+### Default bind addresses
+
+| Service | Host | Port | Notes |
+| :--- | :--- | :--- | :--- |
+| Companion API | `0.0.0.0` (LAN) or `127.0.0.1` | **`8000`** | Set `COMPANION_HOST`, `COMPANION_PORT` |
+| Vite dev server | `127.0.0.1` | **`5173`** | Proxies optional; browser calls companion by **full URL** from env `VITE_COMPANION_URL` |
+
+## Repository layout (create on first commit)
+
+```text
+companion/
+  pyproject.toml          # or requirements.txt: fastapi, uvicorn[standard], pydantic, pydantic-settings, httpx, openai (if using OpenAI-compatible client)
+  companion/
+    __init__.py
+    main.py               # FastAPI app, router mount, CORS
+    settings.py           # pydantic-settings from env
+    models.py             # Pydantic models mirroring § JSON contracts
+    validate.py           # validate_plan(manifest, plan) -> raises or ValidationResult
+    adapters/
+      __init__.py
+      base.py             # Protocol or ABC: execute_skill_call(call) -> StepResult
+      mock.py
+      adeept.py           # stub raise NotImplemented until Phase C
+    planner/
+      __init__.py
+      service.py          # plan_from_nl(...); K2 + fallbacks
+      prompts.py          # system + user templates (strings)
+    routes/
+      health.py
+      plan.py
+      execute.py
+      fallback.py
+examples/
+  manifest.adeept.json
+  plan.valid.json
+  plan.invalid.json
+  plan.fallback.json
+web/
+  index.html
+  src/
+    main.ts               # fetch COMPANION_URL, UI state, block list render
+  vite.config.ts          # optional
+docs/
+  (existing)
+```
+
+## Environment variables
+
+| Variable | Required | Example | Purpose |
+| :--- | :--- | :--- | :--- |
+| `COMPANION_HOST` | no | `0.0.0.0` | Bind address |
+| `COMPANION_PORT` | no | `8000` | Bind port |
+| `ADAPTER` | no | `mock` | `mock` \| `adeept` |
+| `MANIFEST_PATH` | yes | `examples/manifest.adeept.json` | Path to manifest JSON on disk |
+| `FALLBACK_PLAN_PATH` | no | `examples/plan.fallback.json` | Used when all LLMs fail |
+| `PLANNER_PRIMARY` | Phase E+ | `moonshot` | Provider id for routing |
+| `MOONSHOT_API_KEY` | if using K2 | — | Kimi / Moonshot API key |
+| `MOONSHOT_BASE_URL` | no | `https://api.moonshot.cn/v1` | OpenAI-compatible base |
+| `OPENAI_API_KEY` | fallback | — | Second provider |
+| `OPENAI_BASE_URL` | no | `https://api.openai.com/v1` | OpenAI-compatible base |
+| `PLANNER_MODEL_PRIMARY` | no | `moonshot-v1-128k` | Model id for primary |
+| `PLANNER_MODEL_FALLBACKS` | no | `gpt-4o-mini` | Comma-separated model ids in order |
+| `PLANNER_TIMEOUT_S` | no | `60` | Per-call timeout |
+| `EXECUTION_STEP_DELAY_MS` | no | `0` | Mock adapter delay between steps |
+
+**Secrets:** Never commit `.env`; document `.env.example` with empty values.
+
+## JSON contracts (normative shapes)
+
+Use these field names in Pydantic models, OpenAPI, and fixtures. Extra fields are allowed only if marked **extension** and ignored by default clients.
+
+### Manifest (file: `examples/manifest.adeept.json`)
+
+```json
+{
+  "manifest_id": "adeept_5dof_v1",
+  "robot_label": "Adeept 5 DOF",
+  "skills": [
+    {
+      "id": "go_home",
+      "display_name": "Go to home pose",
+      "description": "Move all joints to a known safe home configuration.",
+      "parameters": {},
+      "constraints": {}
+    },
+    {
+      "id": "set_joint_angle",
+      "display_name": "Set joint angle",
+      "description": "Set a single joint angle in degrees.",
+      "parameters": {
+        "joint_index": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "angle_deg": { "type": "number", "minimum": -180, "maximum": 180 }
+      },
+      "constraints": { "max_speed_deg_s": 30 }
+    }
+  ]
+}
+```
+
+**Rules:** `skills[].id` is **`snake_case`**; planner must emit these exact strings as `skill_id`. Every skill **must** have `display_name` (for UI) and `description` (for LLM). `parameters` JSON-Schema-like objects define allowed `arguments` keys and bounds.
+
+### Plan
+
+```json
+{
+  "plan_id": "optional-uuid",
+  "steps": [
+    { "skill_id": "go_home", "arguments": {} },
+    { "skill_id": "set_joint_angle", "arguments": { "joint_index": 1, "angle_deg": 15.0 } }
+  ]
+}
+```
+
+**Rules:** Execution order is **`steps` array order**. Reject empty `steps` unless explicitly allowed for dry-run tests.
+
+### SkillCall (one element of `steps`)
+
+Same as one object in `steps`: `{ "skill_id": string, "arguments": object }`.
+
+### POST `/plan` request body
+
+```json
+{
+  "session_id": "uuid-string-optional",
+  "user_text": "Wave hello slowly",
+  "clarification_replies": []
+}
+```
+
+For follow-up turns after clarification: put user answers as **strings** in `clarification_replies` **in order** matching server’s questions (or use structured replies in extension—default is ordered list of strings).
+
+### POST `/plan` response body (non-streaming)
+
+```json
+{
+  "reasoning": "Plain-language explanation for the user.",
+  "needs_clarification": false,
+  "questions": [],
+  "plan": { "plan_id": "generated", "steps": [] },
+  "validation_errors": [],
+  "model_used": "moonshot-v1-128k"
+}
+```
+
+**Rules:**
+
+- If `needs_clarification` is **true**, `plan` is **null** and `questions` is a non-empty array of **user-facing strings** (no raw skill ids).
+- If `needs_clarification` is **false**, `plan` must be non-null **or** `validation_errors` explains failure; **never** return both a non-null `plan` and non-empty `validation_errors`.
+- **`validation_errors`:** array of `{ "path": "/steps/0/arguments/angle_deg", "message": "exceeds maximum 180" }`.
+
+### POST `/execute` request body
+
+```json
+{
+  "plan": { "plan_id": "x", "steps": [ { "skill_id": "go_home", "arguments": {} } ] },
+  "dry_run": false
+}
+```
+
+If `dry_run` is **true**, companion runs mock path only and returns trace without calling real hardware (even if `ADAPTER=adeept`).
+
+### POST `/execute` response body (success)
+
+```json
+{
+  "ok": true,
+  "trace": {
+    "plan_id": "x",
+    "steps": [
+      {
+        "index": 0,
+        "skill_id": "go_home",
+        "arguments": {},
+        "status": "completed",
+        "detail": "mock: would execute go_home",
+        "started_at": "2026-04-18T12:00:00.000Z",
+        "ended_at": "2026-04-18T12:00:00.050Z"
+      }
+    ]
+  }
+}
+```
+
+**Rules:** `status` is one of **`pending` \| `running` \| `completed` \| `failed` \| `skipped`**.
+
+### GET `/health` response
+
+```json
+{
+  "status": "ok",
+  "manifest_id": "adeept_5dof_v1",
+  "adapter": "mock"
+}
+```
+
+### Error response (4xx/5xx)
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Plan rejected",
+    "details": { "validation_errors": [] }
+  }
+}
+```
+
+**Codes:** `VALIDATION_ERROR`, `PLANNER_ERROR`, `ADAPTER_ERROR`, `INTERNAL_ERROR`.
+
+### POST `/execute/fallback` request body
+
+When all LLM providers fail and the demo must still move the arm:
+
+```json
+{ "use_fallback_file": true }
+```
+
+Companion loads **`FALLBACK_PLAN_PATH`**, runs **`validate_plan`**, then executes if valid. Same response shape as **`POST /execute`**.
+
+### InputEvent (for Phase F triggers)
+
+```json
+{
+  "type": "clap",
+  "payload": { "count": 2 },
+  "timestamp": "2026-04-18T12:00:00.000Z"
+}
+```
+
+## Planner integration (concrete)
+
+1. **Client library:** Use an **OpenAI-compatible** HTTP client (`openai` Python package with `base_url` + `api_key`) for **Moonshot (K2)** and OpenAI fallbacks—same code path, swap `base_url` and `model`.
+2. **Single chat completion** per `/plan` request (MVP): system prompt includes **stringified manifest** (JSON minified) + rules: “Output **only** a single JSON object with keys `reasoning`, `needs_clarification`, `questions`, `plan` matching schema. No markdown fences.”
+3. **Parse:** Strip markdown code fences if present; `json.loads`; then run **`validate_plan`**; if invalid, **one** repair retry sending validator errors back to the same model; if still invalid, return `validation_errors` and null `plan`.
+4. **Fallback chain:** Primary model → each in `PLANNER_MODEL_FALLBACKS` → if all fail, return **`503`** or **`200`** with `plan: null` and `validation_errors` containing code `PLANNER_ERROR`, and have the client call **`POST /execute/fallback`** (see § JSON contracts).
+5. **Clarification:** Single-shot prompt asks the model to set `needs_clarification` and `questions`; next **`POST /plan`** passes **`clarification_replies`** (ordered strings) and the same **`session_id`**; client stores **`session_id`** in **`sessionStorage`** (generate UUID v4 in browser if absent).
+6. **Model IDs:** Set **`PLANNER_MODEL_PRIMARY`** to the sponsor-documented **K2** model name when known; until then use a working Moonshot/OpenAI-compatible model id from provider docs.
+
+## Key terms and components
+
+Authoritative definitions for shared vocabulary. Schemas in-repo may add fields; meanings below stay stable.
+
+### Capability manifest
+
+Machine-readable description of **what this robot integration exposes**: skill identifiers, parameter types, **bounds** (safety limits), and short **descriptions** for humans and the LLM. **Authored** for each integration (e.g. Adeept profile)—not auto-discovered from hardware. Usually one manifest per robot **family** or firmware line, not per end user.
+
+### Skill
+
+A **single entry** in the manifest: a named capability (e.g. move joint, go home) with typed parameters and limits. The planner may only emit **SkillCall**s that reference skills defined here.
+
+### SkillCall
+
+One **invocation** in a plan: `{ skill_id, arguments }`. Arguments must satisfy the manifest for that skill. The executor (via adapters) turns a SkillCall into concrete driver commands.
+
+### Plan
+
+An **ordered list** of **SkillCall**s. Output of the **planner** (after NL); must pass the **validator** before **execute**. In the UI, a plan maps to the **block list** (read-only preview/trace in MVP; editable in stretch).
+
+### Validator
+
+Code that loads the manifest and checks that a **Plan** is well-formed JSON and that **every SkillCall** is allowed and within **bounds**. Runs on the **companion** before any motor command; invalid plans are rejected with actionable errors.
+
+### Companion (service)
+
+Long-running process on the laptop (or SBC) next to the arm: **HTTP/WebSocket** API, hosts the **manifest**, runs the **validator**, routes **execute** to the **robot adapter** (or mock), and often **hosts the planner** (K2 + fallbacks) so API keys stay off thin clients. Binds to localhost or LAN.
+
+### Robot adapter
+
+Implementation that maps **validated SkillCall**s to the real stack: vendor SDK, serial, Python driver, etc. **Vendor-specific code** lives **behind** this boundary. Swapping mock vs real adapter should not change the HTTP contract or `Plan` schema.
+
+### Mock adapter
+
+Same **interface** as the robot adapter but **no hardware**: trace, logs, optional in-memory state. See **[Mock adapter ("fake arm")](#mock-adapter-fake-arm)**.
+
+### Input adapter
+
+**Different** from the robot adapter: normalizes **sensors** (microphone → text via STT, clap detector, keyboard) into **InputEvent**s. Used for triggers and demo inputs, not for moving joints.
+
+### InputEvent
+
+Normalized message: **`type`** (e.g. voice_text, clap), **`payload`**, **`timestamp`**. Lets trigger logic stay independent of which vendor library captured the sound.
+
+### TriggerRule
+
+Optional mapping from **InputEvent** patterns (or conditions) to a **plan template** or automation—when in scope for the demo.
+
+### Planner
+
+Component that turns **natural language** (plus the manifest, server-side) into **Plan JSON**—typically **K2** first, then **fallback** LLMs. Often **colocated** with the companion but **conceptually separate**: it produces plans; the companion **validates and executes** them.
+
+### Execution trace
+
+Ordered **log** of what happened during **execute**: each step (skill id, args, success/failure, timestamps). Feeds the **read-only block list** during/after motion so users see progress without a physics simulator.
+
 ## Core types (conceptual)
+
+Summary table; full definitions in **[Key terms and components](#key-terms-and-components)** above.
 
 | Concept | Role |
 | :--- | :--- |
 | **Manifest** | `Skill` list: `id`, typed params, bounds, `description` for model. |
+| **Skill** | One manifest entry: named capability + limits. |
 | **SkillCall** | `{ skill_id, arguments }` — validates against manifest. |
 | **Plan** | Ordered `SkillCall`s; rendered as a **block list**—**read-only** for preview/trace (MVP), **editable** in stretch. |
 | **InputEvent** | `{ type, payload, timestamp }`. |
@@ -59,7 +376,7 @@ Technical source of truth for architecture and contracts unless superseded by ch
 This is a **contract twin**, not a physics model.
 
 - **Purpose:** Unblock companion, UI, and planner work **without motors**; invalid plans are **rejected** and valid plans run through the **same** pipeline as production—only the last step differs (log vs hardware).
-- **What it is:** A **second implementation** of the robot adapter: for each validated `SkillCall`, **append to an execution trace**, optionally **sleep**, optionally update **in-memory fake joint state** for tests—**no** serial/USB. Uses the same **`POST /execute`** or **`POST /execute/dry-run`** entrypoint as the real arm.
+- **What it is:** A **second implementation** of the robot adapter: for each validated `SkillCall`, **append to an execution trace**, optionally **sleep**, optionally update **in-memory fake joint state** for tests—**no** serial/USB. Uses the same **`POST /execute`** body as the real arm (set **`"dry_run": true`** per § JSON contracts).
 - **What it is not:** Not a required **physics / RL simulation** of the Adeept; optional simple state exists only to support tests or demos.
 - **Shared with the real adapter:** The **same manifest**, **validator**, and **bounds**—the mock does **not** replace validation; it executes what already passed validation.
 
@@ -74,11 +391,12 @@ This is a **contract twin**, not a physics model.
 
 ## Companion service responsibilities
 
-- Host **manifest** for the connected robot.  
-- **POST /plan/validate** (optional) or validate on **POST /execute**.  
-- **POST /execute** with validated `Plan` or enqueue steps.  
-- **Health** endpoint for client discovery on LAN.  
-- **Never** expose unauthenticated execution to the open internet; bind to LAN or require token if needed.
+- Host **manifest** for the connected robot (path from **`MANIFEST_PATH`**).  
+- **`POST /plan`**: run planner; validate any returned **`plan`** before responding (or return validation errors only).  
+- **`POST /execute`**: body per § JSON contracts; **always** run **`validate_plan`** before calling adapter.  
+- **`POST /execute/fallback`**: load **`FALLBACK_PLAN_PATH`** when requested.  
+- **`GET /health`**: liveness.  
+- **Never** expose unauthenticated execution to the public internet; bind to LAN or require token if needed.
 
 ## MVP client (browser / desktop) responsibilities
 
@@ -99,6 +417,8 @@ This is a **contract twin**, not a physics model.
 - Document joint/workspace limits in manifest and in runbook.
 
 ## Planner (K2 primary + fallbacks)
+
+**Normative implementation steps:** [§ Planner integration (concrete)](#planner-integration-concrete). **Request/response JSON:** [§ JSON contracts](#json-contracts-normative-shapes).
 
 **Model routing**
 
@@ -129,15 +449,16 @@ Phases **A–B** ≈ **Milestone 1**; **C** ≈ **Milestone 2**; **D** ≈ **Mil
 
 ### Phase A — Schemas and validation
 
-- Check in **JSON Schema** (or Pydantic/OpenAPI) for manifest, `Plan`, `SkillCall`, `InputEvent`.
-- **Validator** module: load manifest, validate `Plan` and each `SkillCall` arguments against bounds.
-- **Fixture files:** `examples/manifest.adeept.json`, `examples/plan.valid.json`, `examples/plan.invalid.json` (expect reject).
+- Implement Pydantic models matching **[§ JSON contracts](#json-contracts-normative-shapes)**; optionally export JSON Schema from models for docs.
+- **`validate.py`:** `validate_plan(manifest, plan) -> None` (raise with **`VALIDATION_ERROR`**) or return structured errors matching **`validation_errors`** shape.
+- **Fixture files:** `examples/manifest.adeept.json`, `examples/plan.valid.json`, `examples/plan.invalid.json`, **`examples/plan.fallback.json`** (valid minimal plan for judge backup).
 
 ### Phase B — Mock companion
 
-- HTTP server (FastAPI/Flask/etc.) with **`GET /health`**, **`POST /execute`** accepting a `Plan` body (or **`POST /execute/dry-run`** that never touches hardware).
-- Wire the companion to the **mock adapter** described in **[Mock adapter ("fake arm")](#mock-adapter-fake-arm)**—a **contract-level** stub (trace + logs), **not** a physics simulator. Iterate `SkillCall`s, append to trace, configurable delay; no serial/USB.
-- **Exit:** `curl` or script runs invalid plan → 4xx; valid plan → 200 + trace body.
+- **FastAPI** app on **`COMPANION_HOST`:`COMPANION_PORT`** (default **`8000`**); routes in **`routes/`** per **[§ Repository layout](#repository-layout-create-on-first-commit)**.
+- Implement **`GET /health`**, **`POST /execute`** with body **`{ "plan", "dry_run" }`** per § JSON contracts; when **`dry_run`** is true or **`ADAPTER=mock`**, never touch serial/USB.
+- Wire the **mock adapter** from **[Mock adapter ("fake arm")](#mock-adapter-fake-arm)**—contract-level stub only.
+- **Exit:** `curl` invalid plan → **422** with **`VALIDATION_ERROR`**; valid plan → **200** + **`trace`** body.
 
 ### Phase C — Real adapter (Adeept)
 
@@ -148,19 +469,17 @@ Phases **A–B** ≈ **Milestone 1**; **C** ≈ **Milestone 2**; **D** ≈ **Mil
 
 ### Phase D — Browser client
 
-- Static or SPA: **base URL** config, **text input**, **Execute**; **read-only block list** for plan preview and live trace (reuse component; `readOnly: true`).
-- **Allowed shortcut:** hardcode or load **canned `Plan`** until Phase E; companion may expose **`POST /execute/canned?demo=1`** for judge backup only—remove or hide in prod if needed.
-- **Exit:** no terminal required for one full execute path.
+- **Vite + TypeScript** under **`web/`**; read **`VITE_COMPANION_URL`** (e.g. `http://127.0.0.1:8000`) from **`.env`**.
+- UI: text field, **Plan** → **`POST /plan`**, show **`reasoning`** + read-only **block list** from **`plan.steps`**; **Execute** → **`POST /execute`** with **`{ "plan", "dry_run": false }`**.
+- **Shortcut until Phase E:** load **`examples/plan.valid.json`** or call **`POST /execute`** directly for canned motion.
+- **Exit:** full path without terminal; block list uses **`display_name`** from manifest for labels (map **`skill_id`** → manifest lookup).
 
 ### Phase E — Planner on companion (K2 + fallbacks + clarification + reasoning)
 
-- **Config:** `PLANNER_PRIMARY=k2` (or provider-specific id), `PLANNER_FALLBACKS=...` (ordered list), timeouts; **no secrets in repo**.
-- **`POST /plan`** (or **`POST /plan/session`** with turns): body includes `user_text`, optional `session_id`, optional `clarification_replies`. Companion loads manifest **only on server**; calls **K2** first, then fallbacks on failure.
-- **Response shape** (example): `{ "reasoning": "..." | stream token, "needs_clarification": bool, "questions": [...], "plan": Plan | null, "validation_errors": [...] }`. If `needs_clarification`, client shows questions; **next** request includes answers until `plan` is present and valid.
-- **Streaming:** optional **`GET /plan/stream`** or **SSE** on same route for reasoning text only; plan still delivered as complete JSON when ready.
-- **`POST /execute`** unchanged; flow: user confirms plan → execute (or auto-execute for hackathon).
-- **`plans/fallback.json`** + **`POST /execute/fallback`** when **all** LLMs fail.
-- **Exit:** three NL flows including at least one **clarification** or **streaming reasoning** path; manifest never violated; default UI does not show raw manifest.
+- Implement **`POST /plan`** per **[§ JSON contracts](#json-contracts-normative-shapes)** and **[§ Planner integration (concrete)](#planner-integration-concrete)**; env vars per **[§ Environment variables](#environment-variables)**.
+- Wire **`POST /execute/fallback`** and **`FALLBACK_PLAN_PATH`** for judge backup.
+- **Optional:** SSE for reasoning only—defer if time-constrained; non-streaming **`reasoning`** string is enough for MVP.
+- **Exit:** three NL flows; manifest never violated; default UI shows **`display_name`**, not raw **`skill_id`**, unless “advanced” mode.
 
 ### Phase F — Inputs and demo polish
 
@@ -173,29 +492,48 @@ Phases **A–B** ≈ **Milestone 1**; **C** ≈ **Milestone 2**; **D** ≈ **Mil
 - Same endpoints as Phase D/E; **on-device STT** → send **text** only to companion.
 - **Exit:** one device, one successful spoken→execute path.
 
-## API sketch (implementing teams adjust paths)
+## HTTP routes (summary)
 
-| Method | Purpose |
-| :--- | :--- |
-| `GET /health` | Liveness + optional manifest id/version |
-| `POST /plan` | NL (+ optional session + clarification replies) → reasoning text, optional clarification questions, **`Plan`** when ready |
-| `GET /plan/stream` or SSE | *(Optional)* Reasoning tokens only; plan still finalized as JSON |
-| `POST /execute` | Body: validated `Plan` |
-| `POST /execute/dry-run` | Optional: trace without hardware |
-| `POST /execute/fallback` | Baked plan when **all** LLMs unavailable |
+Normative bodies and examples: **[§ JSON contracts](#json-contracts-normative-shapes)**. **Base URL:** `http://<host>:<port>` (default port **`8000`**).
+
+| Method | Path | Purpose |
+| :--- | :--- | :--- |
+| `GET` | `/health` | Liveness + `manifest_id` + `adapter` |
+| `POST` | `/plan` | NL → reasoning + optional clarification + `plan` |
+| `POST` | `/execute` | Body `{ "plan", "dry_run" }` — validate then run adapter |
+| `POST` | `/execute/fallback` | Body `{ "use_fallback_file": true }` — load `FALLBACK_PLAN_PATH` |
+| `GET` | `/plan/stream` | *(Optional stretch)* SSE tokens for `reasoning` only |
+
+**Removed as separate route:** **`POST /execute/dry-run`** — use **`POST /execute`** with **`"dry_run": true`** (see JSON contracts).
 
 ## Glossary
 
+Short index; see **[Key terms and components](#key-terms-and-components)** for full definitions.
+
 | Term | Definition |
 | :--- | :--- |
-| **Manifest** | Authoritative skills for one robot integration. |
-| **Companion** | LAN service: validation + adapter + hardware. |
-| **Plan** | Validated skill sequence. |
-| **Mock adapter** | Contract-level "fake arm": same execute path as real hardware; implements skills with trace/logs (and optional in-memory state), not a required physics sim. |
+| **Capability manifest** | Authored list of skills, params, bounds, descriptions for one robot integration. |
+| **Skill** | One manifest entry: a named capability with typed parameters and limits. |
+| **SkillCall** | Single `{ skill_id, arguments }`; must match manifest. |
+| **Plan** | Ordered SkillCalls from planner; validated before execute; maps to block list UI. |
+| **Validator** | Code that rejects invalid Plan JSON and out-of-bounds SkillCalls using manifest. |
+| **Companion** | Laptop service: API, manifest, validation, execute routing, often planner. |
+| **Robot adapter** | Maps validated SkillCalls to hardware/SDK; vendor code behind this. |
+| **Mock adapter** | Contract-level "fake arm": trace/logs only; same execute path as real adapter. |
+| **Input adapter** | Sensors → InputEvent; not for joint control. |
+| **InputEvent** | Normalized `{ type, payload, timestamp }` from inputs. |
+| **TriggerRule** | Optional: event patterns → plan or template. |
+| **Planner** | NL + manifest → Plan JSON (K2 + fallbacks); often on companion. |
+| **Execution trace** | Step-by-step log during execute; UI preview of motion progress. |
 
 ## Repository expectations
 
-Schemas and example manifests live in-repo when Phase A lands.
+On Phase A completion, the repo **must** contain:
+
+- **`companion/`** package runnable via **`uvicorn companion.main:app --reload --host 0.0.0.0 --port 8000`** (or equivalent).
+- **`examples/*.json`** per Phase A fixture list.
+- **`web/`** static or Vite build instructions in **`README.md`** (root): how to set **`VITE_COMPANION_URL`** and run **`npm run dev`**.
+- **`.env.example`** listing all variables from **[§ Environment variables](#environment-variables)** with empty values.
 
 ---
 
