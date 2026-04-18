@@ -8,6 +8,8 @@
 
 1. [build-spec.md](build-spec.md) — **implementation defaults** (stack, ports, repo layout, env vars), **[JSON contracts](build-spec.md#json-contracts-normative-shapes)** (normative API bodies), **[Key terms and components](build-spec.md#key-terms-and-components)**, **[HTTP routes](build-spec.md#http-routes-summary)**, phases **A–G**.  
 2. [project-brief-for-pm.md](project-brief-for-pm.md) — stakeholder narrative; **Milestones (detailed)** for deliverables, exit criteria, dependencies; **Key terms** one-liner table.
+3. **Architecture proposal (approved structure + contracts):** 
+[docs/architecture-proposal.md](docs/architecture-proposal.md)
 
 ## Design decisions (from planning session)
 
