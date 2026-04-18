@@ -23,7 +23,7 @@ Technical source of truth for architecture and contracts unless superseded by ch
 - **Companion service** is the only component that talks to motors on the default architecture.  
 - **Input events** (clap, etc.) normalized; triggers bind to plans where in scope.  
 - **New robots:** new manifest + adapter behind the same companion contract.  
-- Preview via **trace / dry-run**; no mandatory sim.
+- Preview via **trace / dry-run** (mock adapter or explicit **`/execute/dry-run`**)—**not** a required 3D or physics simulation; no mandatory sim.
 
 ## Architecture
 
@@ -53,6 +53,15 @@ Technical source of truth for architecture and contracts unless superseded by ch
 | **Plan** | Ordered `SkillCall`s; rendered as a **block list**—**read-only** for preview/trace (MVP), **editable** in stretch. |
 | **InputEvent** | `{ type, payload, timestamp }`. |
 | **TriggerRule** | Optional: event patterns → plan template. |
+
+## Mock adapter ("fake arm")
+
+This is a **contract twin**, not a physics model.
+
+- **Purpose:** Unblock companion, UI, and planner work **without motors**; invalid plans are **rejected** and valid plans run through the **same** pipeline as production—only the last step differs (log vs hardware).
+- **What it is:** A **second implementation** of the robot adapter: for each validated `SkillCall`, **append to an execution trace**, optionally **sleep**, optionally update **in-memory fake joint state** for tests—**no** serial/USB. Uses the same **`POST /execute`** or **`POST /execute/dry-run`** entrypoint as the real arm.
+- **What it is not:** Not a required **physics / RL simulation** of the Adeept; optional simple state exists only to support tests or demos.
+- **Shared with the real adapter:** The **same manifest**, **validator**, and **bounds**—the mock does **not** replace validation; it executes what already passed validation.
 
 ## Non-negotiable rules
 
@@ -127,7 +136,7 @@ Phases **A–B** ≈ **Milestone 1**; **C** ≈ **Milestone 2**; **D** ≈ **Mil
 ### Phase B — Mock companion
 
 - HTTP server (FastAPI/Flask/etc.) with **`GET /health`**, **`POST /execute`** accepting a `Plan` body (or **`POST /execute/dry-run`** that never touches hardware).
-- **Mock adapter:** iterate `SkillCall`s, append to trace, configurable delay; no serial/USB.
+- Wire the companion to the **mock adapter** described in **[Mock adapter ("fake arm")](#mock-adapter-fake-arm)**—a **contract-level** stub (trace + logs), **not** a physics simulator. Iterate `SkillCall`s, append to trace, configurable delay; no serial/USB.
 - **Exit:** `curl` or script runs invalid plan → 4xx; valid plan → 200 + trace body.
 
 ### Phase C — Real adapter (Adeept)
@@ -182,6 +191,7 @@ Phases **A–B** ≈ **Milestone 1**; **C** ≈ **Milestone 2**; **D** ≈ **Mil
 | **Manifest** | Authoritative skills for one robot integration. |
 | **Companion** | LAN service: validation + adapter + hardware. |
 | **Plan** | Validated skill sequence. |
+| **Mock adapter** | Contract-level "fake arm": same execute path as real hardware; implements skills with trace/logs (and optional in-memory state), not a required physics sim. |
 
 ## Repository expectations
 

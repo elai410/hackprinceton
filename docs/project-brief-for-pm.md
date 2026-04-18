@@ -107,6 +107,8 @@ Use these as **definition of done** for status reviews. Order matters: later mil
 | **Exit criteria** | Invalid `Plan` JSON is **rejected** with a clear error; valid plan runs through mock adapter **end-to-end** from a manual script or `curl`. No arm required. |
 | **Depends on** | Nothing. |
 
+**Note:** The “mock arm” is **software** that walks through the **same validated skill calls** the real adapter will execute—**same rules, no motors**—not a physics or 3D simulation of the arm unless you add that separately. It is a **contract-level** stub so the team can test the pipeline safely. Details: [build-spec.md — Mock adapter ("fake arm")](build-spec.md#mock-adapter-fake-arm).
+
 ---
 
 ### Milestone 2 — Real robot adapter and smoke test
@@ -188,6 +190,8 @@ Use these as **definition of done** for status reviews. Order matters: later mil
 | **4** | Planner + trace | K2 → fallbacks; clarify + reasoning UI; validated plan → execute |
 | **5** | Demo ready | Script + rehearsal + resilience |
 | **6** | *(Stretch)* Mobile | Same API, on-device STT |
+
+**Visual flowchart (dependencies + stretch):** [milestones-flowchart.md](milestones-flowchart.md)
 
 ## “Purpose” in v1
 
