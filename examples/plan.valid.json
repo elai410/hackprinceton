@@ -1,0 +1,9 @@
+{
+  "plan_id": "example-valid-001",
+  "steps": [
+    { "skill_id": "go_home", "arguments": {} },
+    { "skill_id": "set_joint_angle", "arguments": { "joint_index": 1, "angle_deg": 15.0 } },
+    { "skill_id": "wave", "arguments": { "repetitions": 2 } },
+    { "skill_id": "go_home", "arguments": {} }
+  ]
+}

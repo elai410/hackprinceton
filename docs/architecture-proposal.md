@@ -262,3 +262,151 @@ All functions throw a typed `ApiError` (with `code` and `message`) on 4xx/5xx.
 - WS-C and WS-B never touch the same files after hour 1.
 - WS-D only depends on Contract 4 (HTTP) and Contract 5 (types); it can use curl-verified stubs until WS-C is done.
 - WS-B can wire the execute route with the mock adapter before WS-C ships the planner — WS-D uses `plan.valid.json` directly in the interim.
+
+---
+
+## 5. Addendum: Input Modalities and Binding Layer
+
+*Approved additions. Input modalities are CORE DEMO, not stretch.*
+
+### 5.1 New files
+
+```
+companion/companion/
+├── inputs/
+│   ├── __init__.py        # get_input_adapters(settings) -> list[InputAdapter]; start/stop all
+│   ├── base.py            # InputAdapter Protocol: start(queue), stop(), input_type() -> str
+│   ├── camera.py          # CameraInputAdapter: webcam → gesture InputEvents (OpenCV/MediaPipe)
+│   ├── audio.py           # AudioInputAdapter: mic → clap InputEvents (sounddevice)
+│   └── keyboard.py        # KeyboardInputAdapter: key press InputEvents (pynput)
+├── bindings/
+│   ├── __init__.py
+│   ├── store.py           # BindingStore: thread-safe in-memory config + JSON file backing  [WS-A]
+│   ├── matcher.py         # match_event(event, config) -> list[Binding]; pure fn            [WS-A]
+│   └── dispatcher.py      # async task: dequeue InputEvent → match → validate → execute
+└── routes/
+    ├── bindings.py        # GET/POST/PUT /bindings, DELETE /bindings/{id}
+    └── events.py          # POST /events (browser injects InputEvent into shared queue)
+
+examples/
+└── input_event_schema.json  # [WS-A] every valid InputEvent type + payload keys; used by WS-C in prompts
+
+web/src/components/
+└── BindingPanel.ts        # shows active bindings table + configure input
+```
+
+### 5.2 Updated workstream ownership (corrections applied)
+
+| File | Owner | Rationale |
+|---|---|---|
+| `bindings/store.py` | **WS-A** | Pure state with no hardware dependency; same tier as validate.py |
+| `bindings/matcher.py` | **WS-A** | Pure function; no I/O; testable standalone |
+| `bindings/dispatcher.py` | **WS-B** | Consumes queue; calls adapter |
+| `inputs/` (all) | **WS-B** | Hardware-adjacent; runs in companion process |
+| `routes/bindings.py`, `routes/events.py` | **WS-B** | Route shells; delegate to store + planner |
+| `planner/service.py` `bindings_from_nl()` | **WS-C** | New prompt mode alongside plan_from_nl |
+| `examples/input_event_schema.json` | **WS-A** | Authored fixture; WS-C imports it in prompts.py |
+| `web/src/components/BindingPanel.ts` | **WS-D** | |
+
+### 5.3 New models (appended to models.py)
+
+```
+TriggerPattern      { type: str, payload_match: dict[str, Any] }
+Binding             { binding_id, display_name, trigger: TriggerPattern, plan: Plan }
+BindingConfig       { config_id?, bindings: list[Binding] }
+BindingConfigureRequest   { user_text, session_id? }
+BindingConfigureResponse  { bindings, reasoning, validation_errors }
+```
+
+### 5.4 New contracts
+
+**Contract 7 — InputAdapter Protocol** (`inputs/base.py`, WS-A defines, WS-B implements)
+
+```
+Protocol InputAdapter:
+    start(queue: asyncio.Queue[InputEvent]) -> None   # spawns background thread; non-blocking
+    stop() -> None                                     # signals thread exit; idempotent
+    input_type() -> str                                # "camera" | "audio" | "keyboard"
+```
+
+**Contract 8 — BindingStore** (`bindings/store.py`, WS-A)
+
+```
+class BindingStore:
+    get() -> BindingConfig               # atomic read
+    set(config: BindingConfig) -> None   # hot-reload: atomically replaces; persists to BINDING_STORE_PATH
+    load_from_file(path: str) -> None    # called on startup; noop if file missing
+```
+
+**Contract 9 — match_event** (`bindings/matcher.py`, WS-A)
+
+```
+match_event(event: InputEvent, config: BindingConfig) -> list[Binding]
+```
+Match rule: `trigger.type == event.type` AND all keys in `trigger.payload_match` are present in `event.payload` with equal values. Pure function; no I/O.
+
+**Contract 10 — BindingDispatcher** (`bindings/dispatcher.py`, WS-B)
+
+```
+class BindingDispatcher:
+    __init__(store, adapter, manifest, overlap="drop")
+    async run(queue: asyncio.Queue[InputEvent]) -> None
+        # loop: dequeue → match_event → validate_plan → execute each step
+        # overlap="drop": skip new event if execution in progress
+        # never raises; logs all errors
+```
+
+**Contract 11 — bindings_from_nl** (`planner/service.py`, WS-C)
+
+```
+bindings_from_nl(request: BindingConfigureRequest, manifest: Manifest, settings: Settings)
+    -> BindingConfigureResponse
+```
+Loads `examples/input_event_schema.json` and injects it into the system prompt so K2 only emits event types and gesture names defined there. Validates each binding's plan before returning.
+
+**Contract 12 — Binding HTTP routes** (new endpoints)
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/bindings` | Current `BindingConfig` from store |
+| `POST` | `/bindings/configure` | NL → K2 → validate → store → `BindingConfigureResponse` |
+| `PUT` | `/bindings` | Manual hot-reload: body `BindingConfig`, validate all plans, store |
+| `DELETE` | `/bindings/{binding_id}` | Remove one binding; 404 if not found |
+| `POST` | `/events` | Body `InputEvent`; push to shared queue; `{"queued": true}` |
+
+**Contract 13 — input_event_schema.json** (WS-A authors; WS-C reads in prompts.py)
+
+Enumerates every `type` the input adapters can emit and every valid payload key + value set. WS-C injects this JSON verbatim into the binding system prompt. K2 must not reference types or gesture names absent from this file.
+
+### 5.5 New environment variables
+
+```
+INPUTS_CAMERA_ENABLED=false
+INPUTS_AUDIO_ENABLED=false
+INPUTS_KEYBOARD_ENABLED=true
+BINDING_STORE_PATH=bindings.json
+DISPATCH_OVERLAP=drop           # drop | queue
+```
+
+### 5.6 Event flow
+
+```
+BINDING PATH (runtime loop):
+  Sensor (camera/audio/keyboard) OR browser POST /events
+    → asyncio.Queue[InputEvent]
+      → BindingDispatcher.run()
+        → match_event(event, store.get())
+          → validate_plan(manifest, binding.plan)   ← always re-validate
+            → adapter.execute_skill_call(...)
+
+CONFIGURE PATH (K2 + NL → stored binding):
+  Browser: "when I raise left hand, move arm left"
+    → POST /bindings/configure
+      → bindings_from_nl()   ← K2 uses input_event_schema.json for grounding
+        → validate each plan
+          → store.set(BindingConfig)   ← hot-reload; dispatcher picks up immediately
+
+ONE-SHOT PATH (unchanged):
+  Browser: "wave hello now"
+    → POST /plan → POST /execute
+```

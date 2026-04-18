@@ -1,0 +1,76 @@
+{
+  "config_id": "demo-bindings-v1",
+  "bindings": [
+    {
+      "binding_id": "double-clap-home",
+      "display_name": "Double clap → go home",
+      "trigger": {
+        "type": "clap",
+        "payload_match": { "count": 2 }
+      },
+      "plan": {
+        "plan_id": "bp-home",
+        "steps": [
+          { "skill_id": "go_home", "arguments": {} }
+        ]
+      }
+    },
+    {
+      "binding_id": "left-wave-gesture",
+      "display_name": "Left hand wave → wave greeting",
+      "trigger": {
+        "type": "gesture",
+        "payload_match": { "gesture": "wave_left", "hand": "left" }
+      },
+      "plan": {
+        "plan_id": "bp-wave",
+        "steps": [
+          { "skill_id": "go_home", "arguments": {} },
+          { "skill_id": "wave", "arguments": { "repetitions": 2 } }
+        ]
+      }
+    },
+    {
+      "binding_id": "key-left-pan",
+      "display_name": "Left arrow → pan left 30°",
+      "trigger": {
+        "type": "key",
+        "payload_match": { "key": "left", "action": "press" }
+      },
+      "plan": {
+        "plan_id": "bp-pan-left",
+        "steps": [
+          { "skill_id": "pan_left", "arguments": { "degrees": 30 } }
+        ]
+      }
+    },
+    {
+      "binding_id": "key-right-pan",
+      "display_name": "Right arrow → pan right 30°",
+      "trigger": {
+        "type": "key",
+        "payload_match": { "key": "right", "action": "press" }
+      },
+      "plan": {
+        "plan_id": "bp-pan-right",
+        "steps": [
+          { "skill_id": "pan_right", "arguments": { "degrees": 30 } }
+        ]
+      }
+    },
+    {
+      "binding_id": "key-space-wave",
+      "display_name": "Space → wave",
+      "trigger": {
+        "type": "key",
+        "payload_match": { "key": "space", "action": "press" }
+      },
+      "plan": {
+        "plan_id": "bp-space-wave",
+        "steps": [
+          { "skill_id": "wave", "arguments": { "repetitions": 1 } }
+        ]
+      }
+    }
+  ]
+}

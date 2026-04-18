@@ -1,0 +1,8 @@
+{
+  "plan_id": "fallback-demo-001",
+  "steps": [
+    { "skill_id": "go_home", "arguments": {} },
+    { "skill_id": "wave", "arguments": { "repetitions": 3 } },
+    { "skill_id": "go_home", "arguments": {} }
+  ]
+}

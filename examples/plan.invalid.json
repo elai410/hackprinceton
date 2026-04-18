@@ -1,0 +1,17 @@
+{
+  "plan_id": "example-invalid-001",
+  "steps": [
+    {
+      "skill_id": "set_joint_angle",
+      "arguments": { "joint_index": 1, "angle_deg": 999.0 }
+    },
+    {
+      "skill_id": "nonexistent_skill",
+      "arguments": {}
+    },
+    {
+      "skill_id": "wave",
+      "arguments": { "repetitions": 99 }
+    }
+  ]
+}

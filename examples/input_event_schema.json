@@ -1,0 +1,68 @@
+{
+  "description": "Complete list of valid InputEvent types and payload shapes emitted by Rewire input adapters. K2 MUST only reference types and payload keys defined here. Never invent new event types, gesture names, or payload keys.",
+  "event_types": [
+    {
+      "type": "gesture",
+      "source": "camera",
+      "description": "Hand gesture detected via webcam using MediaPipe.",
+      "payload_keys": {
+        "gesture": {
+          "type": "string",
+          "enum": ["wave_left", "wave_right", "fist", "open_hand", "thumbs_up", "point_up"],
+          "description": "Name of the detected gesture. Only these exact strings are ever emitted."
+        },
+        "hand": {
+          "type": "string",
+          "enum": ["left", "right"],
+          "description": "Which hand performed the gesture."
+        }
+      },
+      "examples": [
+        { "type": "gesture", "payload": { "gesture": "wave_left", "hand": "left" } },
+        { "type": "gesture", "payload": { "gesture": "fist", "hand": "right" } },
+        { "type": "gesture", "payload": { "gesture": "open_hand", "hand": "left" } },
+        { "type": "gesture", "payload": { "gesture": "thumbs_up", "hand": "right" } }
+      ]
+    },
+    {
+      "type": "clap",
+      "source": "audio",
+      "description": "Clapping sound detected via microphone. Emitted on each new clap detected within a 0.5-second window.",
+      "payload_keys": {
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Running count of claps detected in the current window. Use count=1 for single clap, count=2 for double clap, count=3 for triple clap."
+        }
+      },
+      "examples": [
+        { "type": "clap", "payload": { "count": 1 } },
+        { "type": "clap", "payload": { "count": 2 } },
+        { "type": "clap", "payload": { "count": 3 } }
+      ]
+    },
+    {
+      "type": "key",
+      "source": "keyboard",
+      "description": "Keyboard key pressed on the companion machine (via pynput) or injected from the browser (via POST /events).",
+      "payload_keys": {
+        "key": {
+          "type": "string",
+          "description": "Key identifier. Single printable characters (e.g. 'a', 'z', '1') or special key names: 'space', 'enter', 'escape', 'backspace', 'tab', 'up', 'down', 'left', 'right', 'f1' through 'f12'."
+        },
+        "action": {
+          "type": "string",
+          "enum": ["press"],
+          "description": "Key action type. Currently only 'press' is emitted."
+        }
+      },
+      "examples": [
+        { "type": "key", "payload": { "key": "space", "action": "press" } },
+        { "type": "key", "payload": { "key": "h", "action": "press" } },
+        { "type": "key", "payload": { "key": "escape", "action": "press" } },
+        { "type": "key", "payload": { "key": "left", "action": "press" } },
+        { "type": "key", "payload": { "key": "right", "action": "press" } }
+      ]
+    }
+  ]
+}

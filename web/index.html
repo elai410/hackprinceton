@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rewire</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: system-ui, sans-serif;
+        background: #0f0f0f;
+        color: #e8e8e8;
+        min-height: 100vh;
+        padding: 24px;
+      }
+      h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: 0.05em; color: #fff; }
+      h2 { font-size: 1rem; font-weight: 600; color: #ccc; margin-bottom: 12px; }
+      #status-bar {
+        font-size: 0.75rem;
+        color: #888;
+        margin-top: 4px;
+        margin-bottom: 24px;
+      }
+      #status-bar .ok   { color: #4caf50; }
+      #status-bar .err  { color: #f44336; }
+
+      .section { margin-bottom: 32px; }
+
+      textarea, input[type="text"] {
+        width: 100%;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 6px;
+        color: #e8e8e8;
+        font-size: 0.95rem;
+        padding: 10px 12px;
+        resize: vertical;
+      }
+      textarea:focus, input[type="text"]:focus {
+        outline: none;
+        border-color: #555;
+      }
+
+      button {
+        cursor: pointer;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        padding: 8px 18px;
+        transition: background 0.15s;
+      }
+      .btn-primary { background: #2563eb; color: #fff; }
+      .btn-primary:hover { background: #1d4ed8; }
+      .btn-primary:disabled { background: #1e3a8a; color: #6b7280; cursor: not-allowed; }
+      .btn-secondary { background: #27272a; color: #e8e8e8; }
+      .btn-secondary:hover { background: #3f3f46; }
+      .btn-danger { background: #7f1d1d; color: #fca5a5; }
+      .btn-danger:hover { background: #991b1b; }
+
+      .row { display: flex; gap: 8px; margin-top: 8px; }
+
+      #reasoning-box {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 6px;
+        padding: 12px;
+        font-size: 0.875rem;
+        color: #9ca3af;
+        white-space: pre-wrap;
+        min-height: 48px;
+        display: none;
+      }
+
+      #clarification-box { display: none; }
+      #clarification-box p { font-size: 0.875rem; color: #d1d5db; margin-bottom: 8px; }
+
+      .block-list { display: flex; flex-direction: column; gap: 6px; }
+      .block-card {
+        background: #18181b;
+        border: 1px solid #27272a;
+        border-radius: 6px;
+        padding: 10px 14px;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .block-card .step-num { color: #6b7280; font-size: 0.75rem; min-width: 20px; }
+      .block-card .skill-name { font-weight: 600; color: #e4e4e7; flex: 1; }
+      .block-card .skill-args { color: #71717a; font-size: 0.78rem; }
+      .block-card .status-badge {
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 4px;
+        text-transform: uppercase;
+      }
+      .status-pending   { background: #27272a; color: #a1a1aa; }
+      .status-running   { background: #1e3a8a; color: #93c5fd; }
+      .status-completed { background: #14532d; color: #86efac; }
+      .status-failed    { background: #7f1d1d; color: #fca5a5; }
+      .status-skipped   { background: #292524; color: #78716c; }
+
+      .binding-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #18181b;
+        border: 1px solid #27272a;
+        border-radius: 6px;
+        padding: 8px 14px;
+        font-size: 0.85rem;
+      }
+      .binding-trigger { color: #7dd3fc; font-family: monospace; font-size: 0.8rem; }
+      .binding-name { flex: 1; color: #e4e4e7; }
+      .binding-delete { background: none; border: none; color: #6b7280; cursor: pointer; font-size: 0.8rem; padding: 2px 6px; }
+      .binding-delete:hover { color: #f87171; }
+
+      #event-feed {
+        font-family: monospace;
+        font-size: 0.78rem;
+        color: #6b7280;
+        height: 80px;
+        overflow-y: auto;
+        background: #0a0a0a;
+        border: 1px solid #1f2937;
+        border-radius: 4px;
+        padding: 6px 10px;
+      }
+
+      .error-msg {
+        color: #f87171;
+        font-size: 0.82rem;
+        margin-top: 6px;
+        display: none;
+      }
+      .divider {
+        border: none;
+        border-top: 1px solid #27272a;
+        margin: 32px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Rewire</h1>
+    <div id="status-bar">connecting…</div>
+
+    <!-- One-shot plan section -->
+    <div class="section" id="plan-section">
+      <h2>Control</h2>
+      <textarea id="nl-input" rows="3" placeholder="Describe what the arm should do…"></textarea>
+      <div class="row">
+        <button class="btn-primary" id="plan-btn">Plan</button>
+        <button class="btn-secondary" id="mic-btn" title="Toggle microphone">🎙</button>
+      </div>
+      <div id="error-msg" class="error-msg"></div>
+    </div>
+
+    <div id="reasoning-box"></div>
+
+    <div id="clarification-box" class="section">
+      <h2>Clarification needed</h2>
+      <div id="clarification-questions"></div>
+      <div class="row">
+        <button class="btn-primary" id="clarify-submit-btn">Submit answers</button>
+      </div>
+    </div>
+
+    <div class="section" id="plan-preview-section" style="display:none">
+      <h2>Plan preview</h2>
+      <div id="block-list" class="block-list"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn-primary" id="execute-btn">Execute</button>
+        <button class="btn-secondary" id="dry-run-btn">Dry run</button>
+        <button class="btn-secondary" id="discard-btn">Discard</button>
+      </div>
+    </div>
+
+    <hr class="divider" />
+
+    <!-- Binding section -->
+    <div class="section">
+      <h2>Input Bindings</h2>
+      <div id="binding-list" class="block-list" style="margin-bottom:12px"></div>
+      <input type="text" id="binding-nl-input" placeholder="Describe new bindings… e.g. 'double clap = go home'" />
+      <div class="row">
+        <button class="btn-primary" id="binding-configure-btn">Configure via K2</button>
+      </div>
+      <div id="binding-error" class="error-msg"></div>
+      <div style="margin-top:16px">
+        <h2 style="font-size:0.8rem;color:#555;margin-bottom:6px">Live events</h2>
+        <div id="event-feed"></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
