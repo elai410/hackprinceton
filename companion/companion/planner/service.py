@@ -12,6 +12,7 @@ import logging
 import uuid
 from pathlib import Path
 
+from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI, APIError, APITimeoutError
 
 from companion.models import (
@@ -41,26 +42,29 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _model_list(settings: Settings) -> list[tuple[str, str, str]]:
+def _model_list(settings: Settings) -> list[tuple[str, str, str, str]]:
     """
-    Returns [(base_url, model_id, api_key), ...] in fallback order.
+    Returns [(provider, base_url, model_id, api_key), ...] in fallback order.
+    provider is "openai" (OpenAI-compatible incl. K2) or "anthropic".
     Skips entries with missing API keys.
     """
-    entries: list[tuple[str, str, str]] = []
-    if settings.MOONSHOT_API_KEY:
+    entries: list[tuple[str, str, str, str]] = []
+    if settings.K2_API_KEY:
         entries.append((
-            settings.MOONSHOT_BASE_URL,
+            "openai",
+            settings.K2_BASE_URL,
             settings.PLANNER_MODEL_PRIMARY,
-            settings.MOONSHOT_API_KEY,
+            settings.K2_API_KEY,
         ))
-    if settings.OPENAI_API_KEY:
+    if settings.ANTHROPIC_API_KEY:
         for model_id in settings.PLANNER_MODEL_FALLBACKS.split(","):
             model_id = model_id.strip()
             if model_id:
                 entries.append((
-                    settings.OPENAI_BASE_URL,
+                    "anthropic",
+                    "",
                     model_id,
-                    settings.OPENAI_API_KEY,
+                    settings.ANTHROPIC_API_KEY,
                 ))
     return entries
 
@@ -91,30 +95,46 @@ async def _call_llm(
     if not models:
         raise RuntimeError(
             "No LLM providers configured. "
-            "Set MOONSHOT_API_KEY or OPENAI_API_KEY in .env."
+            "Set K2_API_KEY or ANTHROPIC_API_KEY in .env."
         )
 
     last_error: Exception = RuntimeError("no providers attempted")
-    for base_url, model_id, api_key in models:
+    for provider, base_url, model_id, api_key in models:
         try:
-            client = AsyncOpenAI(
-                base_url=base_url,
-                api_key=api_key,
-                timeout=float(settings.PLANNER_TIMEOUT_S),
-            )
-            resp = await client.chat.completions.create(
-                model=model_id,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.1,
-            )
-            content = resp.choices[0].message.content or ""
-            logger.info(f"LLM call succeeded: model={model_id}")
+            if provider == "anthropic":
+                client = AsyncAnthropic(
+                    api_key=api_key,
+                    timeout=float(settings.PLANNER_TIMEOUT_S),
+                )
+                resp = await client.messages.create(
+                    model=model_id,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
+                    max_tokens=4096,
+                    temperature=0.1,
+                )
+                content = "".join(
+                    block.text for block in resp.content if getattr(block, "type", None) == "text"
+                )
+            else:
+                client = AsyncOpenAI(
+                    base_url=base_url,
+                    api_key=api_key,
+                    timeout=float(settings.PLANNER_TIMEOUT_S),
+                )
+                resp = await client.chat.completions.create(
+                    model=model_id,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.1,
+                )
+                content = resp.choices[0].message.content or ""
+            logger.info(f"LLM call succeeded: provider={provider} model={model_id}")
             return content, model_id
         except (APIError, APITimeoutError, Exception) as exc:
-            logger.warning(f"LLM call failed for {model_id}: {exc}")
+            logger.warning(f"LLM call failed for {provider}:{model_id}: {exc}")
             last_error = exc
 
     raise RuntimeError(f"All LLM providers failed. Last error: {last_error}")

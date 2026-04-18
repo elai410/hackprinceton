@@ -75,7 +75,7 @@ These choices remove guesswork for the first vertical slice; the human may swap 
 
 ```text
 companion/
-  pyproject.toml          # or requirements.txt: fastapi, uvicorn[standard], pydantic, pydantic-settings, httpx, openai (if using OpenAI-compatible client)
+  pyproject.toml          # or requirements.txt: fastapi, uvicorn[standard], pydantic, pydantic-settings, httpx, openai (K2 via OpenAI-compatible client), anthropic (Claude fallback)
   companion/
     __init__.py
     main.py               # FastAPI app, router mount, CORS
@@ -119,13 +119,12 @@ docs/
 | `ADAPTER` | no | `mock` | `mock` \| `adeept` |
 | `MANIFEST_PATH` | yes | `examples/manifest.adeept.json` | Path to manifest JSON on disk |
 | `FALLBACK_PLAN_PATH` | no | `examples/plan.fallback.json` | Used when all LLMs fail |
-| `PLANNER_PRIMARY` | Phase E+ | `moonshot` | Provider id for routing |
-| `MOONSHOT_API_KEY` | if using K2 | — | Kimi / Moonshot API key |
-| `MOONSHOT_BASE_URL` | no | `https://api.moonshot.cn/v1` | OpenAI-compatible base |
-| `OPENAI_API_KEY` | fallback | — | Second provider |
-| `OPENAI_BASE_URL` | no | `https://api.openai.com/v1` | OpenAI-compatible base |
-| `PLANNER_MODEL_PRIMARY` | no | `moonshot-v1-128k` | Model id for primary |
-| `PLANNER_MODEL_FALLBACKS` | no | `gpt-4o-mini` | Comma-separated model ids in order |
+| `PLANNER_PRIMARY` | Phase E+ | `k2think` | Provider id for routing |
+| `K2_API_KEY` | if using K2 | — | IFM K2-Think API key |
+| `K2_BASE_URL` | no | `https://api.k2think.ai/v1` | OpenAI-compatible base |
+| `ANTHROPIC_API_KEY` | fallback | — | Anthropic Claude key (fallback provider) |
+| `PLANNER_MODEL_PRIMARY` | no | `MBZUAI-IFM/K2-Think-v2` | Model id for primary |
+| `PLANNER_MODEL_FALLBACKS` | no | `claude-3-5-sonnet-latest` | Comma-separated Claude model ids in order |
 | `PLANNER_TIMEOUT_S` | no | `60` | Per-call timeout |
 | `EXECUTION_STEP_DELAY_MS` | no | `0` | Mock adapter delay between steps |
 
@@ -204,7 +203,7 @@ For follow-up turns after clarification: put user answers as **strings** in `cla
   "questions": [],
   "plan": { "plan_id": "generated", "steps": [] },
   "validation_errors": [],
-  "model_used": "moonshot-v1-128k"
+  "model_used": "MBZUAI-IFM/K2-Think-v2"
 }
 ```
 
@@ -295,12 +294,12 @@ Companion loads **`FALLBACK_PLAN_PATH`**, runs **`validate_plan`**, then execute
 
 ## Planner integration (concrete)
 
-1. **Client library:** Use an **OpenAI-compatible** HTTP client (`openai` Python package with `base_url` + `api_key`) for **Moonshot (K2)** and OpenAI fallbacks—same code path, swap `base_url` and `model`.
+1. **Client libraries:** **IFM K2-Think** via the `openai` Python package (OpenAI-compatible: `base_url=https://api.k2think.ai/v1`, model `MBZUAI-IFM/K2-Think-v2`); **Claude** fallbacks via the `anthropic` Python package (`AsyncAnthropic`, `messages.create`, `system=` + `messages=[{"role":"user",...}]`).
 2. **Single chat completion** per `/plan` request (MVP): system prompt includes **stringified manifest** (JSON minified) + rules: “Output **only** a single JSON object with keys `reasoning`, `needs_clarification`, `questions`, `plan` matching schema. No markdown fences.”
 3. **Parse:** Strip markdown code fences if present; `json.loads`; then run **`validate_plan`**; if invalid, **one** repair retry sending validator errors back to the same model; if still invalid, return `validation_errors` and null `plan`.
 4. **Fallback chain:** Primary model → each in `PLANNER_MODEL_FALLBACKS` → if all fail, return **`503`** or **`200`** with `plan: null` and `validation_errors` containing code `PLANNER_ERROR`, and have the client call **`POST /execute/fallback`** (see § JSON contracts).
 5. **Clarification:** Single-shot prompt asks the model to set `needs_clarification` and `questions`; next **`POST /plan`** passes **`clarification_replies`** (ordered strings) and the same **`session_id`**; client stores **`session_id`** in **`sessionStorage`** (generate UUID v4 in browser if absent).
-6. **Model IDs:** Set **`PLANNER_MODEL_PRIMARY`** to the sponsor-documented **K2** model name when known; until then use a working Moonshot/OpenAI-compatible model id from provider docs.
+6. **Model IDs:** **`PLANNER_MODEL_PRIMARY=MBZUAI-IFM/K2-Think-v2`** against **`K2_BASE_URL=https://api.k2think.ai/v1`** with **`Authorization: Bearer $K2_API_KEY`**. Fallbacks (e.g. `claude-3-5-sonnet-latest`) hit Anthropic with `ANTHROPIC_API_KEY`.
 
 ## Key terms and components
 

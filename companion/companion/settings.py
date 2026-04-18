@@ -20,13 +20,12 @@ class Settings(BaseSettings):
     FALLBACK_PLAN_PATH: str = "examples/plan.fallback.json"
 
     # Planner
-    PLANNER_PRIMARY: str = "moonshot"
-    MOONSHOT_API_KEY: Optional[str] = None
-    MOONSHOT_BASE_URL: str = "https://api.moonshot.cn/v1"
-    OPENAI_API_KEY: Optional[str] = None
-    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
-    PLANNER_MODEL_PRIMARY: str = "moonshot-v1-128k"
-    PLANNER_MODEL_FALLBACKS: str = "gpt-4o-mini"
+    PLANNER_PRIMARY: str = "k2think"
+    K2_API_KEY: Optional[str] = None
+    K2_BASE_URL: str = "https://api.k2think.ai/v1"
+    ANTHROPIC_API_KEY: Optional[str] = None
+    PLANNER_MODEL_PRIMARY: str = "MBZUAI-IFM/K2-Think-v2"
+    PLANNER_MODEL_FALLBACKS: str = "claude-3-5-sonnet-latest"
     PLANNER_TIMEOUT_S: int = 60
 
     # Mock adapter

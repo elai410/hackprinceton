@@ -14,7 +14,7 @@ pip install -e .
 # pip install -e ".[inputs]"
 
 cp ../.env.example .env
-# Edit .env — set MOONSHOT_API_KEY (and/or OPENAI_API_KEY for fallback)
+# Edit .env — set K2_API_KEY (IFM K2-Think) and/or ANTHROPIC_API_KEY for Claude fallback
 # Set ADAPTER=mock for dev without hardware
 
 uvicorn companion.main:app --reload --host 0.0.0.0 --port 8000
@@ -45,8 +45,8 @@ See `.env.example` for all variables. Critical ones:
 |---|---|
 | `ADAPTER` | `mock` (default) or `adeept` |
 | `MANIFEST_PATH` | Path to robot manifest JSON |
-| `MOONSHOT_API_KEY` | K2 primary planner key |
-| `OPENAI_API_KEY` | Fallback planner key |
+| `K2_API_KEY` | IFM K2-Think primary planner key (`https://api.k2think.ai/v1`, model `MBZUAI-IFM/K2-Think-v2`) |
+| `ANTHROPIC_API_KEY` | Fallback planner key (Claude, e.g. `claude-3-5-sonnet-latest`) |
 | `INPUTS_KEYBOARD_ENABLED` | `true` to capture key presses (default true) |
 | `INPUTS_AUDIO_ENABLED` | `true` for clap detection (needs sounddevice) |
 | `INPUTS_CAMERA_ENABLED` | `true` for gesture detection (needs mediapipe) |

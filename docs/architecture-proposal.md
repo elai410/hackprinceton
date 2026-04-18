@@ -9,7 +9,7 @@ rewire/                          # repo root
 ├── README.md                    # setup, run instructions, env config
 │
 ├── companion/                   # Python package root
-│   ├── pyproject.toml           # deps: fastapi, uvicorn, pydantic, pydantic-settings, openai, httpx
+│   ├── pyproject.toml           # deps: fastapi, uvicorn, pydantic, pydantic-settings, openai, anthropic, httpx
 │   └── companion/
 │       ├── __init__.py
 │       ├── main.py              # FastAPI app creation, router mounts, CORS, lifespan
