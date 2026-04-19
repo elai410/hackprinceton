@@ -213,7 +213,9 @@ async def plan_from_nl(
 ) -> PlanResponse:
     input_sources = available_input_sources(settings)
     system_prompt = build_plan_system_prompt(manifest, input_sources)
-    user_prompt = build_plan_user_prompt(request.user_text, request.clarification_replies)
+    user_prompt = build_plan_user_prompt(
+        request.user_text, request.clarification_replies, request.history
+    )
 
     # Call LLM
     try:
@@ -306,7 +308,9 @@ async def plan_from_nl(
         try:
             raw2, model_used = await _call_llm(
                 system_prompt,
-                build_plan_user_prompt(request.user_text, request.clarification_replies) + repair_suffix,
+                build_plan_user_prompt(
+                    request.user_text, request.clarification_replies, request.history
+                ) + repair_suffix,
                 settings,
             )
             data2 = json.loads(_strip_fences(raw2))

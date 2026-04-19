@@ -48,6 +48,8 @@ export default function ConversationPane({ manifest, mode }: Props) {
     setSuggestedTrigger,
     setActiveBindingId,
     phase,
+    planHistory,
+    appendPlanHistory,
   } = useStore();
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -62,7 +64,7 @@ export default function ConversationPane({ manifest, mode }: Props) {
       setPhase("planning");
       setError(null);
     },
-    onSuccess: (resp) => {
+    onSuccess: (resp, variables) => {
       setModelUsed(resp.model_used);
       if (resp.reasoning) {
         pushTurn({ role: "assistant", kind: "reasoning", text: resp.reasoning });
@@ -76,6 +78,9 @@ export default function ConversationPane({ manifest, mode }: Props) {
           questions: resp.questions,
         });
         setPhase("clarifying");
+        // Intentionally do NOT append to planHistory here — wait until the
+        // clarification round actually produces a plan, then collapse the
+        // whole round into a single history entry below.
         return;
       }
       if (!resp.plan) {
@@ -103,6 +108,17 @@ export default function ConversationPane({ manifest, mode }: Props) {
           ? `Workflow ready — ${stepWord}. Activate the trigger on the right and it will fire whenever ${describeTrigger(trigger)}.`
           : `Workflow ready — ${stepWord}. Hit Run on the right.`,
       });
+      // Record the resolved turn so subsequent /plan calls can edit it
+      // instead of restarting from the new instruction alone. Read the
+      // exact user_text + clarification_replies from `variables` (the
+      // payload we just sent) so concurrent submissions can't desync.
+      appendPlanHistory({
+        user_text: variables.user_text,
+        clarification_replies: variables.clarification_replies,
+        reasoning: resp.reasoning || null,
+        plan: resp.plan,
+        suggested_trigger: trigger,
+      });
       setPhase("ready");
     },
     onError: (err: unknown) => {
@@ -121,6 +137,7 @@ export default function ConversationPane({ manifest, mode }: Props) {
       session_id: sessionId,
       user_text: text,
       clarification_replies: [],
+      history: planHistory,
     });
   }
 
@@ -137,6 +154,7 @@ export default function ConversationPane({ manifest, mode }: Props) {
       session_id: sessionId,
       user_text: userText,
       clarification_replies: replies,
+      history: planHistory,
     });
   }
 

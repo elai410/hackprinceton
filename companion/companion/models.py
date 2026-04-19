@@ -49,10 +49,28 @@ class ValidationError(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class PriorTurn(BaseModel):
+    """A previously-resolved turn in the same planning session.
+
+    Sent by the frontend with each /plan call so the planner can edit the
+    last plan instead of re-deriving it from the new instruction alone.
+    Only entries that produced a real plan are recorded; clarification
+    rounds are collapsed into the single eventual entry that pairs the
+    original instruction with its answers.
+    """
+
+    user_text: str
+    clarification_replies: list[str] = Field(default_factory=list)
+    reasoning: Optional[str] = None
+    plan: Optional[Plan] = None
+    suggested_trigger: Optional["TriggerPattern"] = None
+
+
 class PlanRequest(BaseModel):
     session_id: Optional[str] = None
     user_text: str
     clarification_replies: list[str] = Field(default_factory=list)
+    history: list[PriorTurn] = Field(default_factory=list)
 
 
 class PlanResponse(BaseModel):
@@ -170,6 +188,8 @@ class BindingConfigureResponse(BaseModel):
     validation_errors: list[ValidationError] = Field(default_factory=list)
 
 
-# Resolve forward reference: PlanResponse.suggested_trigger -> TriggerPattern,
-# which is only declared further down in this module.
+# Resolve forward references for models that point at TriggerPattern (declared
+# further down) or at each other under `from __future__ import annotations`.
 PlanResponse.model_rebuild()
+PriorTurn.model_rebuild()
+PlanRequest.model_rebuild()

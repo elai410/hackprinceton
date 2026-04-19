@@ -1,3 +1,6 @@
+import { api } from "../api";
+import { useStore } from "../state/store";
+
 interface HeaderProps {
   connected: boolean;
   manifestId: string;
@@ -6,6 +9,25 @@ interface HeaderProps {
 }
 
 export default function Header({ connected, manifestId, adapter, robotLabel }: HeaderProps) {
+  async function handleHomeClick() {
+    // Disarm any active binding before resetting so the mic / keyboard
+    // listener actually stops on the companion. Run cleanup in parallel
+    // and don't block reset() on success — a stuck binding shouldn't make
+    // the home click feel sticky.
+    const { activeBindingId, suggestedTrigger, reset } = useStore.getState();
+    const cleanups: Promise<unknown>[] = [];
+    if (activeBindingId) {
+      cleanups.push(api.deleteBinding(activeBindingId));
+    }
+    if (suggestedTrigger?.type === "speech") {
+      cleanups.push(api.setSpeechListening(false));
+    }
+    if (cleanups.length > 0) {
+      await Promise.allSettled(cleanups);
+    }
+    reset();
+  }
+
   return (
     <header className="bg-plum text-cream border-b border-rule">
       {/* multi-tone accent strip at the very top */}
@@ -18,9 +40,14 @@ export default function Header({ connected, manifestId, adapter, robotLabel }: H
 
       <div className="px-8 py-7 flex items-end justify-between gap-8">
         <div className="flex items-end gap-6">
-          <h1 className="display text-[48px] leading-none">
+          <button
+            type="button"
+            onClick={handleHomeClick}
+            aria-label="Back to home"
+            className="display text-[48px] leading-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-sand focus-visible:ring-offset-2 focus-visible:ring-offset-plum transition-opacity hover:opacity-90"
+          >
             Re<span className="text-clay">w</span>ire
-          </h1>
+          </button>
           <p className="hidden sm:block max-w-md text-sm text-cream/80 leading-snug pb-1">
             Natural-language control for robots.
             <span className="block italic text-cream/60">

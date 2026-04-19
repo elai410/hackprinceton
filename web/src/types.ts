@@ -39,10 +39,19 @@ export interface ValidationError {
   message: string;
 }
 
+export interface PriorTurn {
+  user_text: string;
+  clarification_replies: string[];
+  reasoning?: string | null;
+  plan?: Plan | null;
+  suggested_trigger?: TriggerPattern | null;
+}
+
 export interface PlanRequest {
   session_id?: string;
   user_text: string;
   clarification_replies: string[];
+  history?: PriorTurn[];
 }
 
 export interface TriggerPattern {
