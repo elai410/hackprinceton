@@ -1,5 +1,13 @@
 import { create } from "zustand";
-import type { Plan, SkillCall, StepResult, StepStatus } from "../types";
+import type {
+  Plan,
+  RecentEvent,
+  RecentFire,
+  SkillCall,
+  StepResult,
+  StepStatus,
+  TriggerPattern,
+} from "../types";
 
 export type Phase =
   | "idle"
@@ -8,6 +16,7 @@ export type Phase =
   | "ready"
   | "executing"
   | "done"
+  | "armed"
   | "error";
 
 export interface Turn {
@@ -36,8 +45,28 @@ interface StoreState {
   // Per-step execution state, keyed by current plan step index
   stepStates: StepUiState[];
 
+  // Latest user request text — used to derive a friendly binding display name.
+  lastUserText: string | null;
+
+  // Set when the planner returns a TriggerPattern. While this is non-null the
+  // primary action shifts from "Run now" to "Activate trigger".
+  suggestedTrigger: TriggerPattern | null;
+
+  // Set after the user activates a trigger; identifies the binding currently
+  // armed on the companion so the UI can offer a "Stop listening" action.
+  activeBindingId: string | null;
+
   modelUsed: string | null;
   errorMsg: string | null;
+
+  // Live event feed, fed by the SSE stream from /events/stream. Each list is
+  // ordered oldest-first and ring-buffered at a small fixed cap so render
+  // cost stays bounded.
+  recentEvents: RecentEvent[];
+  recentFires: RecentFire[];
+  // True once the SSE EventSource has delivered its initial snapshot. Used
+  // by LiveTranscript to distinguish "still connecting" from "no events yet".
+  eventsConnected: boolean;
 
   // ---- actions
   pushTurn: (turn: Omit<Turn, "id" | "timestamp">) => void;
@@ -52,8 +81,18 @@ interface StoreState {
   setClarification: (questions: string[] | null) => void;
   setModelUsed: (model: string | null) => void;
   setError: (msg: string | null) => void;
+  setLastUserText: (text: string | null) => void;
+  setSuggestedTrigger: (trigger: TriggerPattern | null) => void;
+  setActiveBindingId: (id: string | null) => void;
+  setEventsSnapshot: (events: RecentEvent[], fires: RecentFire[]) => void;
+  pushRecentEvent: (event: RecentEvent) => void;
+  pushRecentFire: (fire: RecentFire) => void;
+  setEventsConnected: (connected: boolean) => void;
   reset: () => void;
 }
+
+const MAX_RECENT_EVENTS = 30;
+const MAX_RECENT_FIRES = 15;
 
 function uid(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -66,8 +105,14 @@ export const useStore = create<StoreState>((set) => ({
   pendingClarification: null,
   plan: null,
   stepStates: [],
+  lastUserText: null,
+  suggestedTrigger: null,
+  activeBindingId: null,
   modelUsed: null,
   errorMsg: null,
+  recentEvents: [],
+  recentFires: [],
+  eventsConnected: false,
 
   pushTurn: (turn) =>
     set((s) => ({
@@ -153,6 +198,35 @@ export const useStore = create<StoreState>((set) => ({
 
   setModelUsed: (modelUsed) => set({ modelUsed }),
   setError: (errorMsg) => set({ errorMsg }),
+  setLastUserText: (lastUserText) => set({ lastUserText }),
+  setSuggestedTrigger: (suggestedTrigger) => set({ suggestedTrigger }),
+  setActiveBindingId: (activeBindingId) => set({ activeBindingId }),
+
+  setEventsSnapshot: (recentEvents, recentFires) =>
+    set({
+      recentEvents: recentEvents.slice(-MAX_RECENT_EVENTS),
+      recentFires: recentFires.slice(-MAX_RECENT_FIRES),
+      eventsConnected: true,
+    }),
+
+  pushRecentEvent: (event) =>
+    set((s) => {
+      // De-dup by id so a snapshot+stream race doesn't render twice.
+      if (s.recentEvents.some((e) => e.id === event.id)) return s;
+      const next = [...s.recentEvents, event];
+      if (next.length > MAX_RECENT_EVENTS) next.splice(0, next.length - MAX_RECENT_EVENTS);
+      return { recentEvents: next };
+    }),
+
+  pushRecentFire: (fire) =>
+    set((s) => {
+      if (s.recentFires.some((f) => f.id === fire.id)) return s;
+      const next = [...s.recentFires, fire];
+      if (next.length > MAX_RECENT_FIRES) next.splice(0, next.length - MAX_RECENT_FIRES);
+      return { recentFires: next };
+    }),
+
+  setEventsConnected: (eventsConnected) => set({ eventsConnected }),
 
   reset: () =>
     set({
@@ -161,6 +235,9 @@ export const useStore = create<StoreState>((set) => ({
       pendingClarification: null,
       plan: null,
       stepStates: [],
+      lastUserText: null,
+      suggestedTrigger: null,
+      activeBindingId: null,
       modelUsed: null,
       errorMsg: null,
     }),

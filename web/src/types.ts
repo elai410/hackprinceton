@@ -45,6 +45,11 @@ export interface PlanRequest {
   clarification_replies: string[];
 }
 
+export interface TriggerPattern {
+  type: string;
+  payload_match: Record<string, unknown>;
+}
+
 export interface PlanResponse {
   reasoning: string;
   needs_clarification: boolean;
@@ -52,6 +57,55 @@ export interface PlanResponse {
   plan: Plan | null;
   validation_errors: ValidationError[];
   model_used: string;
+  // Present when the user described a trigger pattern (e.g. "when you hear
+  // hello, …"). The frontend can offer "Save as binding" alongside Run.
+  suggested_trigger?: TriggerPattern | null;
+}
+
+export interface InputSource {
+  type: string;
+  label: string;
+  description: string;
+  examples: string[];
+  payload_hint: string;
+  enabled: boolean;
+  transport: "local-adapter" | "external-events";
+}
+
+export interface InputsResponse {
+  sources: InputSource[];
+}
+
+export interface Binding {
+  binding_id: string;
+  display_name: string;
+  trigger: TriggerPattern;
+  plan: Plan;
+}
+
+export interface BindingConfig {
+  config_id?: string | null;
+  bindings: Binding[];
+}
+
+export interface RecentEvent {
+  id: string;
+  type: string;
+  timestamp: string;
+  payload: Record<string, unknown>;
+}
+
+export interface RecentFire {
+  id: string;
+  binding_id: string;
+  ok: boolean;
+  detail: string;
+  timestamp: string;
+}
+
+export interface RecentEventsResponse {
+  events: RecentEvent[];
+  fires: RecentFire[];
 }
 
 export interface ExecuteRequest {

@@ -1,15 +1,21 @@
 import type {
+  Binding,
+  BindingConfig,
   ExecuteRequest,
   ExecuteResponse,
   HealthResponse,
+  InputsResponse,
   Manifest,
   PlanRequest,
   PlanResponse,
+  RecentEventsResponse,
 } from "./types";
 
-const BASE =
+export const COMPANION_BASE_URL =
   (import.meta.env.VITE_COMPANION_URL as string | undefined) ??
   "http://127.0.0.1:8000";
+
+const BASE = COMPANION_BASE_URL;
 
 export class ApiError extends Error {
   constructor(
@@ -53,6 +59,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   health: () => request<HealthResponse>("/health"),
   manifest: () => request<Manifest>("/manifest"),
+  inputs: () => request<InputsResponse>("/inputs"),
   plan: (req: PlanRequest) =>
     request<PlanResponse>("/plan", {
       method: "POST",
@@ -62,5 +69,24 @@ export const api = {
     request<ExecuteResponse>("/execute", {
       method: "POST",
       body: JSON.stringify(req),
+    }),
+  bindings: () => request<BindingConfig>("/bindings"),
+  addBinding: (binding: Binding) =>
+    request<BindingConfig>("/bindings/add", {
+      method: "POST",
+      body: JSON.stringify(binding),
+    }),
+  deleteBinding: (bindingId: string) =>
+    request<void>(`/bindings/${encodeURIComponent(bindingId)}`, {
+      method: "DELETE",
+    }),
+  recentEvents: (eventLimit = 20, fireLimit = 10) =>
+    request<RecentEventsResponse>(
+      `/events/recent?events=${eventLimit}&fires=${fireLimit}`,
+    ),
+  setSpeechListening: (listening: boolean) =>
+    request<{ listening: boolean }>("/inputs/speech", {
+      method: "POST",
+      body: JSON.stringify({ listening }),
     }),
 };
