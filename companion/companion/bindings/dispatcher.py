@@ -7,10 +7,12 @@ Owned by WS-B.
 
 import asyncio
 import logging
+from typing import Optional
 
 from companion.adapters.base import RobotAdapter
 from companion.bindings.matcher import match_event
 from companion.bindings.store import BindingStore
+from companion.events.recent import RecentEventStore
 from companion.models import ExecuteTrace, InputEvent, Manifest, StepResult
 from companion.validate import validate_plan
 
@@ -24,12 +26,16 @@ class BindingDispatcher:
         adapter: RobotAdapter,
         manifest: Manifest,
         overlap: str = "drop",
+        recent_events: Optional[RecentEventStore] = None,
     ) -> None:
         self._store = store
         self._adapter = adapter
         self._manifest = manifest
         self._overlap = overlap  # "drop" | "queue"
         self._executing = False
+        # Optional UI/debug ring buffer. None disables the live transcription
+        # feed without affecting dispatch.
+        self._recent = recent_events
 
     async def run(self, queue: "asyncio.Queue[InputEvent]") -> None:
         """
@@ -47,6 +53,11 @@ class BindingDispatcher:
                 logger.error(f"BindingDispatcher unhandled error: {exc}")
 
     async def _handle(self, event: InputEvent) -> None:
+        # Always record the event for the UI feed, even if no binding matches.
+        # The user wants to SEE that the mic is hearing them.
+        if self._recent is not None:
+            self._recent.record_event(event)
+
         config = self._store.get()
         matches = match_event(event, config)
         if not matches:
@@ -66,6 +77,8 @@ class BindingDispatcher:
                     f"Binding '{binding.binding_id}' plan failed validation "
                     f"(will not execute): {msg}"
                 )
+                if self._recent is not None:
+                    self._recent.record_fire(binding.binding_id, ok=False, detail=msg)
                 continue
 
             self._executing = True
@@ -76,8 +89,18 @@ class BindingDispatcher:
                     f"Binding '{binding.binding_id}' executed "
                     f"({'ok' if ok else 'FAILED'})"
                 )
+                if self._recent is not None:
+                    self._recent.record_fire(
+                        binding.binding_id,
+                        ok=ok,
+                        detail="" if ok else "one or more steps failed",
+                    )
             except Exception as exc:
                 logger.error(f"Binding '{binding.binding_id}' execution error: {exc}")
+                if self._recent is not None:
+                    self._recent.record_fire(
+                        binding.binding_id, ok=False, detail=str(exc)
+                    )
             finally:
                 self._executing = False
 

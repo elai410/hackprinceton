@@ -62,6 +62,11 @@ class PlanResponse(BaseModel):
     plan: Optional[Plan] = None
     validation_errors: list[ValidationError] = Field(default_factory=list)
     model_used: str
+    # If the user described a trigger pattern (e.g. "when you hear hello, …")
+    # the planner returns the matching trigger here so the frontend can offer
+    # to save the plan as a binding instead of just running it once.
+    # None means the request was a one-shot ("wave three times now").
+    suggested_trigger: Optional["TriggerPattern"] = None
 
 
 # ---------------------------------------------------------------------------
@@ -163,3 +168,8 @@ class BindingConfigureResponse(BaseModel):
     bindings: list[Binding] = Field(default_factory=list)
     reasoning: str
     validation_errors: list[ValidationError] = Field(default_factory=list)
+
+
+# Resolve forward reference: PlanResponse.suggested_trigger -> TriggerPattern,
+# which is only declared further down in this module.
+PlanResponse.model_rebuild()

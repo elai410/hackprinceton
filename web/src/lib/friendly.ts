@@ -1,4 +1,4 @@
-import type { Skill, SkillCall, SkillParameterSchema } from "../types";
+import type { Skill, SkillCall, SkillParameterSchema, TriggerPattern } from "../types";
 
 export const JOINT_NAMES = [
   "Base yaw",
@@ -38,8 +38,8 @@ export function describeCall(call: SkillCall, skill?: Skill): string {
       return f != null ? `Close gripper (${f})` : "Close gripper";
     }
     case "wave": {
-      const cycles = args.cycles ?? args.repeats ?? 2;
-      return `Wave (${cycles}×)`;
+      const reps = args.repetitions ?? args.cycles ?? args.repeats ?? 2;
+      return `Wave (${reps}×)`;
     }
     case "oled_text":
       return `Show "${String(args.text ?? "")}" on OLED`;
@@ -52,6 +52,61 @@ export function describeCall(call: SkillCall, skill?: Skill): string {
 
 export function findSkill(manifest: { skills: Skill[] } | null, id: string) {
   return manifest?.skills.find((s) => s.id === id);
+}
+
+/** Plain-English summary of a TriggerPattern for the UI. */
+export function describeTrigger(trigger: TriggerPattern): string {
+  const m = trigger.payload_match ?? {};
+  switch (trigger.type) {
+    case "speech": {
+      const raw = String(m.normalized ?? m.text ?? "");
+      const keyword = raw.startsWith("~") ? raw.slice(1) : raw;
+      if (!keyword) return "any speech";
+      return raw.startsWith("~")
+        ? `you say something containing "${keyword}"`
+        : `you say "${keyword}"`;
+    }
+    case "clap": {
+      const count = Number(m.count ?? 1);
+      if (count === 2) return "you clap twice";
+      if (count === 3) return "you clap three times";
+      return count === 1 ? "you clap" : `you clap ${count} times`;
+    }
+    case "key": {
+      const key = String(m.key ?? "any key");
+      const action = String(m.action ?? "press");
+      return `you ${action} ${key}`;
+    }
+    case "gesture": {
+      const g = String(m.gesture ?? "any gesture");
+      return `you make a ${g.replace(/_/g, " ")}`;
+    }
+    default: {
+      const pairs = Object.entries(m)
+        .map(([k, v]) => `${k}=${String(v)}`)
+        .join(", ");
+      return pairs ? `${trigger.type} (${pairs})` : trigger.type;
+    }
+  }
+}
+
+/** Generate a stable, kebab-case binding id from a trigger and user text. */
+export function bindingIdFor(trigger: TriggerPattern, userText: string): string {
+  const slug = userText
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "binding";
+  return `${trigger.type}-${slug}`;
+}
+
+/** Human-readable label for the bindings list, e.g. "When you say "hello", wave". */
+export function bindingDisplayName(trigger: TriggerPattern, userText: string): string {
+  const trimmed = userText.trim().replace(/\s+/g, " ");
+  if (trimmed.length > 0 && trimmed.length <= 80) {
+    return trimmed[0].toUpperCase() + trimmed.slice(1);
+  }
+  return `When ${describeTrigger(trigger)}`;
 }
 
 export type ParamKind = "joint" | "angle" | "integer" | "number" | "text" | "enum" | "unknown";

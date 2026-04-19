@@ -97,6 +97,88 @@ mock adapter so the rest of the stack still boots.
 
 ---
 
+## Inputs (triggers)
+
+Rewire decouples *what triggers an action* from *what device hosts the trigger*.
+Any number of input adapters can run side-by-side; each emits `InputEvent`s
+into a shared queue, the **BindingDispatcher** matches them against stored
+bindings, and the matching plan is validated and run on the robot.
+
+| Source | Where it runs | Event `type` | Payload shape |
+|---|---|---|---|
+| **Speech** (open-source Whisper) | Companion (laptop, Pi, NUC…) | `speech` | `{text, normalized, language, duration_s, confidence, source}` |
+| **Clap** (amplitude) | Companion | `clap` | `{count}` |
+| **Keyboard** (pynput) | Companion | `key` | `{key, action}` |
+| **Camera gesture** (MediaPipe) | Companion | `gesture` | adapter-defined |
+| **Anything else** (phone, watch, smart speaker, hardware button…) | External device | any | any — POST to `/events` |
+
+The microphone does **not** need to live next to the robot. Examples:
+
+- The **default**: laptop mic → companion-hosted Whisper → events on the same
+  process.
+- A phone in your pocket transcribing locally and POSTing
+  `{type: "speech", payload: {text, normalized}}` to `http://<companion>:8000/events`.
+- A smart-speaker bridge or a smartwatch app doing the same.
+
+### Enabling local speech (laptop mic + Whisper)
+
+```bash
+cd companion
+pip install -e ".[speech]"           # ~200 MB; CTranslate2 backend
+# in .env (root):
+INPUTS_SPEECH_ENABLED=true
+SPEECH_MODEL_SIZE=base.en            # tiny.en is faster, small.en more accurate
+SPEECH_DEVICE=cpu                    # use "cuda" if you have an NVIDIA GPU
+```
+
+Restart the companion. First boot downloads the model (~150 MB for `base.en`)
+to `~/.cache/huggingface/hub`; subsequent starts are instant. Watch the log:
+
+```
+INFO  SpeechInputAdapter: loading whisper 'base.en' on cpu (int8)…
+INFO  SpeechInputAdapter: model ready in 2.3s — listening on default input
+INFO  SpeechInputAdapter: heard 'hello' (0.62s, lang=en)
+```
+
+### Authoring bindings
+
+`examples/bindings.example.json` shows the format. Speech triggers can match
+exactly (`"normalized": "wave hello"`) or by **substring** with a leading `~`
+(`"normalized": "~hello"` fires when "hello" appears anywhere in the
+transcript). Hot-load with:
+
+```bash
+curl -X PUT http://localhost:8000/bindings \
+  -H 'content-type: application/json' \
+  -d @examples/bindings.example.json
+```
+
+Or generate them via natural language (uses K2):
+
+```bash
+curl -X POST http://localhost:8000/bindings/configure \
+  -H 'content-type: application/json' \
+  -d '{"user_text":"when you hear hello, wave three times then go home"}'
+```
+
+### Posting events from anywhere
+
+Any client can act as an input source by posting to `/events`:
+
+```bash
+curl -X POST http://localhost:8000/events \
+  -H 'content-type: application/json' \
+  -d '{
+    "type": "speech",
+    "payload": {"text": "hello there", "normalized": "hello there", "source": "phone"},
+    "timestamp": "2026-04-19T02:45:00Z"
+  }'
+```
+
+The dispatcher treats it identically to events from the local Whisper adapter.
+
+---
+
 ## Environment variables
 
 See `.env.example` for all variables. Critical ones:
@@ -108,8 +190,10 @@ See `.env.example` for all variables. Critical ones:
 | `K2_API_KEY` | IFM K2-Think primary planner key (`https://api.k2think.ai/v1`, model `MBZUAI-IFM/K2-Think-v2`) |
 | `ANTHROPIC_API_KEY` | Fallback planner key (Claude, e.g. `claude-3-5-sonnet-latest`) |
 | `INPUTS_KEYBOARD_ENABLED` | `true` to capture key presses (default true) |
-| `INPUTS_AUDIO_ENABLED` | `true` for clap detection (needs sounddevice) |
-| `INPUTS_CAMERA_ENABLED` | `true` for gesture detection (needs mediapipe) |
+| `INPUTS_AUDIO_ENABLED` | `true` for clap detection (needs `sounddevice`) |
+| `INPUTS_SPEECH_ENABLED` | `true` for local mic + open-source Whisper STT (needs `faster-whisper`) |
+| `INPUTS_CAMERA_ENABLED` | `true` for gesture detection (needs `mediapipe`) |
+| `SPEECH_MODEL_SIZE` | `tiny.en` / `base.en` / `small.en` (default `base.en`) |
 | `VITE_COMPANION_URL` | Web client → companion URL (set in `web/.env`) |
 
 ---

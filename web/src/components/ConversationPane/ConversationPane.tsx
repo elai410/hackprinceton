@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import type { Manifest, PlanRequest } from "../../types";
 import { api, ApiError } from "../../api";
 import { useStore } from "../../state/store";
+import { describeTrigger } from "../../lib/friendly";
 import Composer from "./Composer";
 import TurnList from "./TurnList";
 import ClarificationCard from "./ClarificationCard";
@@ -43,6 +44,9 @@ export default function ConversationPane({ manifest, mode }: Props) {
     setClarification,
     setModelUsed,
     setError,
+    setLastUserText,
+    setSuggestedTrigger,
+    setActiveBindingId,
     phase,
   } = useStore();
 
@@ -85,12 +89,19 @@ export default function ConversationPane({ manifest, mode }: Props) {
       }
       setPlan(resp.plan);
       setClarification(null);
+      const trigger = resp.suggested_trigger ?? null;
+      setSuggestedTrigger(trigger);
+      // A fresh plan supersedes any previously-armed binding from this session.
+      setActiveBindingId(null);
+      const stepWord = `${resp.plan.steps.length} step${
+        resp.plan.steps.length === 1 ? "" : "s"
+      }`;
       pushTurn({
         role: "assistant",
         kind: "summary",
-        text: `Workflow ready — ${resp.plan.steps.length} step${
-          resp.plan.steps.length === 1 ? "" : "s"
-        }. Hit Run on the right.`,
+        text: trigger
+          ? `Workflow ready — ${stepWord}. Activate the trigger on the right and it will fire whenever ${describeTrigger(trigger)}.`
+          : `Workflow ready — ${stepWord}. Hit Run on the right.`,
       });
       setPhase("ready");
     },
@@ -104,6 +115,7 @@ export default function ConversationPane({ manifest, mode }: Props) {
 
   function handleSubmit(text: string) {
     if (!text.trim()) return;
+    setLastUserText(text);
     pushTurn({ role: "user", kind: "message", text });
     planMut.mutate({
       session_id: sessionId,

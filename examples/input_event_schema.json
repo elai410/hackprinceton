@@ -1,5 +1,9 @@
 {
-  "description": "Complete list of valid InputEvent types and payload shapes emitted by Rewire input adapters. K2 MUST only reference types and payload keys defined here. Never invent new event types, gesture names, or payload keys.",
+  "description": "Complete list of valid InputEvent types and payload shapes emitted by Rewire input adapters. The planner MUST only reference types and payload keys defined here. Never invent new event types, gesture names, or payload keys.",
+  "matching_operators": {
+    "exact": "Default. trigger.payload_match[key] == event.payload[key]. Use for keyboard, gesture, clap counts.",
+    "substring": "If the value in trigger.payload_match starts with '~', the rest is a case-insensitive substring needle that must appear in the event payload value. Use this for natural-language speech triggers. Example: {\"normalized\": \"~hello\"} fires whenever 'hello' appears anywhere in the spoken phrase. Prefer matching the 'normalized' field for speech (lowercased, trimmed, terminal punctuation stripped)."
+  },
   "event_types": [
     {
       "type": "gesture",
@@ -39,6 +43,42 @@
         { "type": "clap", "payload": { "count": 1 } },
         { "type": "clap", "payload": { "count": 2 } },
         { "type": "clap", "payload": { "count": 3 } }
+      ]
+    },
+    {
+      "type": "speech",
+      "source": "speech",
+      "description": "Spoken phrase transcribed by the local open-source Whisper adapter (or posted to /events from any external client — phone, watch, smart speaker). One event per detected utterance, after a brief silence. PREFER substring matching on the 'normalized' field for trigger words (e.g. {\"normalized\": \"~hello\"}). Use exact match only when the user wants the WHOLE phrase to equal a specific string.",
+      "payload_keys": {
+        "text": {
+          "type": "string",
+          "description": "Raw transcript with original casing and punctuation."
+        },
+        "normalized": {
+          "type": "string",
+          "description": "Lowercased, trimmed, terminal punctuation stripped. Match against this field for case-insensitive trigger phrases."
+        },
+        "language": {
+          "type": "string",
+          "description": "ISO-639-1 language code detected by Whisper (e.g. 'en')."
+        },
+        "duration_s": {
+          "type": "number",
+          "description": "Length of the spoken phrase in seconds."
+        },
+        "confidence": {
+          "type": "number",
+          "description": "Mean avg_logprob across whisper segments (closer to 0 is more confident, typically -1.0..0.0). May be null."
+        },
+        "source": {
+          "type": "string",
+          "description": "Where the speech event originated: 'local-mic' for the companion's adapter, or any free-form label from external clients posting to /events (e.g. 'phone', 'watch')."
+        }
+      },
+      "examples": [
+        { "type": "speech", "payload": { "text": "Hello there.", "normalized": "hello there", "language": "en", "duration_s": 0.7, "confidence": -0.21, "source": "local-mic" } },
+        { "type": "speech", "payload": { "text": "Goodnight!", "normalized": "goodnight", "language": "en", "duration_s": 0.5, "confidence": -0.18, "source": "local-mic" } },
+        { "type": "speech", "payload": { "text": "Wave at me twice", "normalized": "wave at me twice", "language": "en", "duration_s": 1.1, "confidence": -0.30, "source": "phone" } }
       ]
     },
     {

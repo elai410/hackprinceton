@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from companion.models import (
+    Binding,
     BindingConfig,
     BindingConfigureRequest,
     BindingConfigureResponse,
@@ -28,6 +29,41 @@ async def configure_bindings(
     if response.bindings:
         state.binding_store.set(BindingConfig(bindings=response.bindings))
     return response
+
+
+@router.post("/bindings/add", response_model=BindingConfig, status_code=201)
+def add_binding(body: Binding, request: Request) -> BindingConfig:
+    """
+    Append a single binding to the active set without disturbing existing
+    bindings. Used by the frontend "Activate trigger" flow: the user already
+    has an authored plan + a planner-suggested TriggerPattern, so we just
+    need to wire them together and hot-reload the dispatcher.
+
+    If a binding with the same binding_id already exists, it is replaced
+    in-place (so re-activating the same trigger updates rather than
+    duplicates it).
+    """
+    state = request.app.state
+
+    plan_errors = validate_plan(state.manifest, body.plan)
+    if plan_errors:
+        raise HTTPException(
+            status_code=422,
+            detail=ErrorResponse(
+                error=ErrorDetail(
+                    code="VALIDATION_ERROR",
+                    message="Binding plan failed validation",
+                    details={"validation_errors": [e.model_dump() for e in plan_errors]},
+                )
+            ).model_dump(),
+        )
+
+    current = state.binding_store.get()
+    next_bindings = [b for b in current.bindings if b.binding_id != body.binding_id]
+    next_bindings.append(body)
+    new_config = BindingConfig(config_id=current.config_id, bindings=next_bindings)
+    state.binding_store.set(new_config)
+    return new_config
 
 
 @router.put("/bindings", response_model=BindingConfig)

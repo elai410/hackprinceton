@@ -3,9 +3,14 @@ import { api } from "./api";
 import Header from "./components/Header";
 import ConversationPane from "./components/ConversationPane/ConversationPane";
 import WorkflowPane from "./components/WorkflowPane/WorkflowPane";
+import { useEventStream } from "./hooks/useEventStream";
 import { useStore } from "./state/store";
 
 export default function App() {
+  // One SSE connection lives at the App root; LiveTranscript and
+  // WorkflowPane both read events out of the global store.
+  useEventStream();
+
   const health = useQuery({
     queryKey: ["health"],
     queryFn: api.health,
