@@ -12,7 +12,7 @@
         "plan_id": "wave-three-times",
         "steps": [
           { "skill_id": "go_home",   "arguments": {} },
-          { "skill_id": "wave",      "arguments": { "cycles": 3 } },
+          { "skill_id": "wave",      "arguments": { "repetitions": 3 } },
           { "skill_id": "go_home",   "arguments": {} }
         ]
       }
@@ -53,7 +53,7 @@
       },
       "plan": {
         "plan_id": "clap-wave",
-        "steps": [{ "skill_id": "wave", "arguments": { "cycles": 2 } }]
+        "steps": [{ "skill_id": "wave", "arguments": { "repetitions": 2 } }]
       }
     }
   ]

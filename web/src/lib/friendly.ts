@@ -38,8 +38,8 @@ export function describeCall(call: SkillCall, skill?: Skill): string {
       return f != null ? `Close gripper (${f})` : "Close gripper";
     }
     case "wave": {
-      const cycles = args.cycles ?? args.repeats ?? 2;
-      return `Wave (${cycles}×)`;
+      const reps = args.repetitions ?? args.cycles ?? args.repeats ?? 2;
+      return `Wave (${reps}×)`;
     }
     case "oled_text":
       return `Show "${String(args.text ?? "")}" on OLED`;

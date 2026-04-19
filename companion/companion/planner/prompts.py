@@ -123,7 +123,7 @@ Example — triggered request "when you hear hello, wave three times":
   "plan": {{
     "plan_id": "wave-on-hello",
     "steps": [
-      {{"skill_id": "wave", "arguments": {{"cycles": 3}}}},
+      {{"skill_id": "wave", "arguments": {{"repetitions": 3}}}},
       {{"skill_id": "go_home", "arguments": {{}}}}
     ]
   }},
@@ -140,7 +140,7 @@ Example — one-shot request "wave three times now":
   "questions": [],
   "plan": {{
     "plan_id": "wave-now",
-    "steps": [{{"skill_id": "wave", "arguments": {{"cycles": 3}}}}]
+    "steps": [{{"skill_id": "wave", "arguments": {{"repetitions": 3}}}}]
   }},
   "suggested_trigger": null
 }}
@@ -236,7 +236,7 @@ Example — "double clap to go home, and wave when you hear hi":
       "trigger": {{"type": "speech", "payload_match": {{"normalized": "~hi"}}}},
       "plan": {{
         "plan_id": "bp-wave-hi",
-        "steps": [{{"skill_id": "wave", "arguments": {{"cycles": 2}}}}]
+        "steps": [{{"skill_id": "wave", "arguments": {{"repetitions": 2}}}}]
       }}
     }}
   ]
