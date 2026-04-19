@@ -46,10 +46,10 @@ export default function Header({ connected, manifestId, adapter, robotLabel }: H
             aria-label="Back to home"
             className="display text-[48px] leading-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-sand focus-visible:ring-offset-2 focus-visible:ring-offset-plum transition-opacity hover:opacity-90"
           >
-            Re<span className="text-clay">w</span>ire
+            Re<span className="text-clay">W</span>ire
           </button>
           <p className="hidden sm:block max-w-md text-sm text-cream/80 leading-snug pb-1">
-            Natural-language control for robots.
+            Reprogram the physical world with natural language.
             <span className="block italic text-cream/60">
               <span className="text-sand">Compose</span> &middot;{" "}
               <span className="text-sand">Verify</span> &middot;{" "}

@@ -1,5 +1,5 @@
 {
-  "description": "Complete list of valid InputEvent types and payload shapes emitted by Rewire input adapters. The planner MUST only reference types and payload keys defined here. Never invent new event types, gesture names, or payload keys.",
+  "description": "Complete list of valid InputEvent types and payload shapes emitted by ReWire input adapters. The planner MUST only reference types and payload keys defined here. Never invent new event types, gesture names, or payload keys.",
   "matching_operators": {
     "exact": "Default. trigger.payload_match[key] == event.payload[key]. Use for keyboard, gesture, clap counts.",
     "substring": "If the value in trigger.payload_match starts with '~', the rest is a case-insensitive substring needle that must appear in the event payload value. Use this for natural-language speech triggers. Example: {\"normalized\": \"~hello\"} fires whenever 'hello' appears anywhere in the spoken phrase. Prefer matching the 'normalized' field for speech (lowercased, trimmed, terminal punctuation stripped)."

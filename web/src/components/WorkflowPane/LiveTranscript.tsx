@@ -116,9 +116,9 @@ export default function LiveTranscript({ trigger, isArmed, isToggling }: Props) 
             >
               {statusLabel}
             </span>
-            {keyword && (
+            {keyword && isArmed && (
               <span className="font-mono text-[11px] text-graphite">
-                {isArmed ? "waiting for" : "will wait for"} &ldquo;{keyword}&rdquo;
+                listening for &ldquo;{keyword}&rdquo;
               </span>
             )}
           </div>

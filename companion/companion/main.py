@@ -130,7 +130,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="Rewire Companion",
+        title="ReWire Companion",
         description="NL-driven robot control companion service",
         version="0.1.0",
         lifespan=lifespan,

@@ -13,27 +13,24 @@ interface Props {
   mode: "hero" | "compact";
 }
 
+// Each example showcases a different axis of the platform:
+//   1. speech trigger + explicit multi-step routine
+//   2. key trigger + vague affective prompt (planner improvises a routine)
+//   3. speech trigger + vague vibe (planner composes a 3-step expression)
+//   4. key trigger + vague social prompt (planner picks tasteful sequence)
+//
+// Coloring across all four is intentionally uniform: trigger text in clay,
+// action text in sage. This mirrors the Trigger / Behavior legend at the
+// bottom of the hero so the colors actually mean something instead of just
+// rotating decoratively.
 const TRIGGER_EXAMPLES = [
-  { trigger: "When you hear \u201Chello\u201D", action: "wave three times.", accent: "clay" },
-  { trigger: "When I clap twice", action: "return to the home pose.", accent: "sage" },
-  { trigger: "When I say \u201Cshow off\u201D", action: "sweep the base slowly left to right.", accent: "sky" },
-  { trigger: "When you hear \u201Cgoodnight\u201D", action: "show \u201CGoodnight\u201D on the OLED and lower the arm.", accent: "plum" },
+  { trigger: "When you hear \u201Chello\u201D", action: "wave and greet me on the screen." },
+  { trigger: "When I press the \u201Ck\u201D key", action: "look sad." },
+  { trigger: "When you hear \u201Cquestion\u201D", action: "answer like Rocky." },
+  { trigger: "When I press the spacebar", action: "show off." },
 ] as const;
 
-const ACCENT_TEXT: Record<string, string> = {
-  clay: "text-clay",
-  sage: "text-sage",
-  sky: "text-sky",
-  plum: "text-plum",
-};
-const ACCENT_BG: Record<string, string> = {
-  clay: "bg-clay",
-  sage: "bg-sage",
-  sky: "bg-sky",
-  plum: "bg-plum",
-};
-
-export default function ConversationPane({ manifest, mode }: Props) {
+export default function ConversationPane({ manifest: _manifest, mode }: Props) {
   const {
     sessionId,
     turns,
@@ -175,18 +172,18 @@ export default function ConversationPane({ manifest, mode }: Props) {
 
         <div className="relative w-full max-w-3xl flex flex-col gap-10">
           <div className="flex flex-col items-start gap-3">
-            <span className="eyebrow text-clay">New interaction</span>
+            <span className="eyebrow text-clay">The control layer for consumer robotics</span>
             <h2 className="display text-[44px] sm:text-[56px] leading-[0.95]">
-              Tell{" "}
-              <span className="italic text-graphite">
-                {manifest?.robot_label ?? "the arm"}
-              </span>{" "}
-              how it should respond.
+              Reprogram the physical world with{" "}
+              <span className="italic text-graphite">natural language.</span>
             </h2>
             <p className="text-[15px] text-graphite max-w-2xl leading-relaxed mt-2">
-              Pair a <span className="text-clay">trigger</span> with a{" "}
-              <span className="text-sage">behavior</span> in plain language. The
-              planner composes a runnable workflow in seconds.
+              ReWire is the AI-native control layer that lets anyone change the
+              behavior of machines with just a sentence. Wire any input —{" "}
+              <span className="text-clay">voice</span>,{" "}
+              <span className="text-clay">keystroke</span>,{" "}
+              <span className="text-clay">sensor</span> — to any robot's{" "}
+              <span className="text-sage">capabilities</span>. No SDK required.
             </p>
           </div>
 
@@ -194,7 +191,7 @@ export default function ConversationPane({ manifest, mode }: Props) {
             <Composer
               onSubmit={handleSubmit}
               disabled={planMut.isPending}
-              placeholder="e.g. when you hear &lsquo;hello&rsquo;, wave three times"
+              placeholder="e.g. when you hear &lsquo;hello&rsquo;, wave and greet me on the screen"
               size="hero"
             />
           </div>
@@ -209,11 +206,10 @@ export default function ConversationPane({ manifest, mode }: Props) {
                     onClick={() => handleSubmit(`${ex.trigger}, ${ex.action}`)}
                     className="w-full text-left px-4 py-5 hover:bg-paper transition-colors flex items-center gap-5"
                   >
-                    <span className={`w-1.5 h-8 ${ACCENT_BG[ex.accent]} shrink-0`} />
                     <span className="flex-1 font-display text-[19px] leading-snug text-ink">
-                      <span className={`${ACCENT_TEXT[ex.accent]} italic`}>{ex.trigger}</span>
+                      <span className="text-clay italic">{ex.trigger}</span>
                       <span className="text-graphite">, </span>
-                      <span className="italic">{ex.action}</span>
+                      <span className="text-sage italic">{ex.action}</span>
                     </span>
                     <span className="eyebrow shrink-0 text-mute group-hover:text-ink">Use &rarr;</span>
                   </button>
@@ -250,11 +246,11 @@ export default function ConversationPane({ manifest, mode }: Props) {
           <p className="eyebrow text-clay">Conversation</p>
         </div>
         <h2 className="display text-3xl mt-2">
-          Refine or describe a new interaction.
+          Reprogram a behavior, or wire a new one.
         </h2>
         <p className="text-sm text-graphite mt-2 max-w-xl">
-          The composed workflow is on the right. Send another message to adjust it
-          or start fresh.
+          The composed workflow is on the right. Send another message to refine
+          the routine in plain English, or describe a new one from scratch.
         </p>
       </div>
 
