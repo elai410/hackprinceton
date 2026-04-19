@@ -1,75 +1,59 @@
 {
-  "config_id": "demo-bindings-v1",
+  "config_id": "demo-bindings",
   "bindings": [
     {
-      "binding_id": "double-clap-home",
-      "display_name": "Double clap → go home",
+      "binding_id": "speech-hello-wave",
+      "display_name": "Wave when you say hello",
       "trigger": {
-        "type": "clap",
-        "payload_match": { "count": 2 }
+        "type": "speech",
+        "payload_match": { "normalized": "~hello" }
       },
       "plan": {
-        "plan_id": "bp-home",
+        "plan_id": "wave-three-times",
         "steps": [
-          { "skill_id": "go_home", "arguments": {} }
+          { "skill_id": "go_home",   "arguments": {} },
+          { "skill_id": "wave",      "arguments": { "cycles": 3 } },
+          { "skill_id": "go_home",   "arguments": {} }
         ]
       }
     },
     {
-      "binding_id": "left-wave-gesture",
-      "display_name": "Left hand wave → wave greeting",
+      "binding_id": "speech-goodnight-oled",
+      "display_name": "Show goodnight + lower arm",
       "trigger": {
-        "type": "gesture",
-        "payload_match": { "gesture": "wave_left", "hand": "left" }
+        "type": "speech",
+        "payload_match": { "normalized": "~goodnight" }
       },
       "plan": {
-        "plan_id": "bp-wave",
+        "plan_id": "goodnight",
         "steps": [
-          { "skill_id": "go_home", "arguments": {} },
-          { "skill_id": "wave", "arguments": { "repetitions": 2 } }
+          { "skill_id": "oled_text",       "arguments": { "text": "Goodnight" } },
+          { "skill_id": "set_joint_angle", "arguments": { "joint_index": 1, "angle_deg": 30 } }
         ]
       }
     },
     {
-      "binding_id": "key-left-pan",
-      "display_name": "Left arrow → pan left 30°",
-      "trigger": {
-        "type": "key",
-        "payload_match": { "key": "left", "action": "press" }
-      },
-      "plan": {
-        "plan_id": "bp-pan-left",
-        "steps": [
-          { "skill_id": "pan_left", "arguments": { "degrees": 30 } }
-        ]
-      }
-    },
-    {
-      "binding_id": "key-right-pan",
-      "display_name": "Right arrow → pan right 30°",
-      "trigger": {
-        "type": "key",
-        "payload_match": { "key": "right", "action": "press" }
-      },
-      "plan": {
-        "plan_id": "bp-pan-right",
-        "steps": [
-          { "skill_id": "pan_right", "arguments": { "degrees": 30 } }
-        ]
-      }
-    },
-    {
-      "binding_id": "key-space-wave",
-      "display_name": "Space → wave",
+      "binding_id": "key-space-home",
+      "display_name": "Spacebar returns to home",
       "trigger": {
         "type": "key",
         "payload_match": { "key": "space", "action": "press" }
       },
       "plan": {
-        "plan_id": "bp-space-wave",
-        "steps": [
-          { "skill_id": "wave", "arguments": { "repetitions": 1 } }
-        ]
+        "plan_id": "space-go-home",
+        "steps": [{ "skill_id": "go_home", "arguments": {} }]
+      }
+    },
+    {
+      "binding_id": "clap-twice-wave",
+      "display_name": "Two claps = wave hello",
+      "trigger": {
+        "type": "clap",
+        "payload_match": { "count": 2 }
+      },
+      "plan": {
+        "plan_id": "clap-wave",
+        "steps": [{ "skill_id": "wave", "arguments": { "cycles": 2 } }]
       }
     }
   ]
