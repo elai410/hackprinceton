@@ -15,6 +15,7 @@ from pathlib import Path
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI, APIError, APITimeoutError
 
+from companion.inputs.registry import available_input_sources
 from companion.models import (
     Binding,
     BindingConfigureRequest,
@@ -23,6 +24,7 @@ from companion.models import (
     Plan,
     PlanRequest,
     PlanResponse,
+    TriggerPattern,
     ValidationError,
 )
 from companion.planner.prompts import (
@@ -70,26 +72,58 @@ def _model_list(settings: Settings) -> list[tuple[str, str, str, str]]:
 
 
 def _extract_json(text: str) -> str:
-    """Find the outermost valid JSON object in text by trying each '{' from right to left."""
-    end = text.rfind("}")
-    if end == -1:
-        return text
+    """
+    Find a complete JSON object inside arbitrary model output.
+
+    Reasoning models (K2-Think, DeepSeek-R1, etc.) sometimes emit free-form
+    scratchpad text, embed a complete JSON object in the middle, then keep
+    talking — and occasionally start a *second* JSON draft that gets cut off
+    by the token limit. We need to recover the largest *valid, complete*
+    object regardless of where it sits.
+
+    Strategy: walk every `{` position, run `JSONDecoder.raw_decode` from
+    there (which parses one well-formed JSON value and reports its end
+    position), and remember the longest successfully-parsed substring. Pick
+    the longest because partial inner objects (e.g. `{"normalized":"~hello"}`)
+    are also valid JSON but not what we want.
+    """
+    decoder = json.JSONDecoder()
+    best: str = ""
     pos = 0
-    candidates = []
+    n = len(text)
     while True:
         idx = text.find("{", pos)
         if idx == -1:
             break
-        candidates.append(idx)
-        pos = idx + 1
-    for start in reversed(candidates):
-        candidate = text[start:end + 1]
         try:
-            json.loads(candidate)
-            return candidate
+            _obj, end = decoder.raw_decode(text, idx)
+            candidate = text[idx:end]
+            if len(candidate) > len(best):
+                best = candidate
+            pos = end
         except json.JSONDecodeError:
-            continue
-    return text
+            pos = idx + 1
+        if pos >= n:
+            break
+    return best or text
+
+
+def _parse_suggested_trigger(data: dict) -> "TriggerPattern | None":
+    """Best-effort parse of the planner's suggested_trigger field.
+
+    Returns None when the planner produced a one-shot plan (suggested_trigger
+    omitted/null) or when the trigger object failed schema validation. We
+    silently drop malformed triggers rather than failing the whole plan, so
+    a successful action plan still reaches the user.
+    """
+    raw = data.get("suggested_trigger")
+    if not raw:
+        return None
+    try:
+        return TriggerPattern.model_validate(raw)
+    except Exception as exc:
+        logger.warning(f"Discarding malformed suggested_trigger: {exc}")
+        return None
 
 
 def _strip_fences(text: str) -> str:
@@ -177,7 +211,8 @@ async def plan_from_nl(
     manifest: Manifest,
     settings: Settings,
 ) -> PlanResponse:
-    system_prompt = build_plan_system_prompt(manifest)
+    input_sources = available_input_sources(settings)
+    system_prompt = build_plan_system_prompt(manifest, input_sources)
     user_prompt = build_plan_user_prompt(request.user_text, request.clarification_replies)
 
     # Call LLM
@@ -221,6 +256,7 @@ async def plan_from_nl(
     reasoning: str = data.get("reasoning", "")
     needs_clarification: bool = bool(data.get("needs_clarification", False))
     questions: list[str] = data.get("questions", [])
+    suggested_trigger = _parse_suggested_trigger(data)
 
     if needs_clarification:
         return PlanResponse(
@@ -284,6 +320,7 @@ async def plan_from_nl(
                     plan=plan2,
                     validation_errors=[],
                     model_used=model_used,
+                    suggested_trigger=_parse_suggested_trigger(data2) or suggested_trigger,
                 )
             errors = errors2
             reasoning = data2.get("reasoning", reasoning)
@@ -306,6 +343,7 @@ async def plan_from_nl(
         plan=plan,
         validation_errors=[],
         model_used=model_used,
+        suggested_trigger=suggested_trigger,
     )
 
 
@@ -327,7 +365,10 @@ async def bindings_from_nl(
         logger.warning(f"Could not load input_event_schema.json: {exc}")
         input_event_schema = {}
 
-    system_prompt = build_binding_system_prompt(manifest, input_event_schema)
+    input_sources = available_input_sources(settings)
+    system_prompt = build_binding_system_prompt(
+        manifest, input_event_schema, input_sources
+    )
     user_prompt = build_binding_user_prompt(request.user_text)
 
     try:
