@@ -18,9 +18,19 @@ from companion.adapters import get_adapter
 from companion.adapters.mock import MockAdapter
 from companion.bindings.dispatcher import BindingDispatcher
 from companion.bindings.store import BindingStore
+from companion.events.recent import RecentEventStore
 from companion.inputs import get_input_adapters
 from companion.models import InputEvent, Manifest
-from companion.routes import bindings, events, execute, fallback, health, manifest, plan
+from companion.routes import (
+    bindings,
+    events,
+    execute,
+    fallback,
+    health,
+    inputs as inputs_route,
+    manifest,
+    plan,
+)
 from companion.settings import Settings
 
 logging.basicConfig(
@@ -58,12 +68,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Shared asyncio queue feeds both hardware adapters and POST /events
     event_queue: asyncio.Queue[InputEvent] = asyncio.Queue()
 
+    # Recent-events ring buffer powers the live transcription view in the UI.
+    recent_events = RecentEventStore(max_events=30, max_fires=30)
+
     # Dispatcher
     dispatcher = BindingDispatcher(
         store=binding_store,
         adapter=adapter,
         manifest=manifest,
         overlap=settings.DISPATCH_OVERLAP,
+        recent_events=recent_events,
     )
 
     # Input adapters (keyboard/audio/camera based on settings flags)
@@ -79,6 +93,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.mock_adapter = mock_adapter
     app.state.binding_store = binding_store
     app.state.event_queue = event_queue
+    app.state.recent_events = recent_events
+    app.state.input_adapters = input_adapters
 
     # Background tasks
     dispatcher_task = asyncio.create_task(
@@ -122,18 +138,16 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        ],
+        # Accept any localhost / 127.0.0.1 dev origin on any port so that vite
+        # falling back to 5174/5175/etc. when 5173 is taken still works.
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
     app.include_router(health.router)
     app.include_router(manifest.router)
+    app.include_router(inputs_route.router)
     app.include_router(plan.router)
     app.include_router(execute.router)
     app.include_router(fallback.router)

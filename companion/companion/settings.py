@@ -41,9 +41,27 @@ class Settings(BaseSettings):
 
     # Input adapters
     INPUTS_CAMERA_ENABLED: bool = False
-    INPUTS_AUDIO_ENABLED: bool = False
+    INPUTS_AUDIO_ENABLED: bool = False        # amplitude clap detector
     INPUTS_KEYBOARD_ENABLED: bool = True
+    INPUTS_SPEECH_ENABLED: bool = False       # local mic + open-source Whisper
+
+    # Speech (local STT via faster-whisper)
+    # SPEECH_MODEL_SIZE: tiny.en | base.en | small.en | medium.en | large-v3
+    #   tiny.en  ~75 MB  fastest, lower accuracy
+    #   base.en  ~150 MB recommended default for laptop CPU
+    #   small.en ~500 MB more accurate, slower on CPU
+    SPEECH_MODEL_SIZE: str = "base.en"
+    SPEECH_LANGUAGE: str = "en"               # ISO code; "" = auto-detect
+    SPEECH_DEVICE: str = "cpu"                # cpu | cuda | auto
+    SPEECH_VAD_THRESHOLD: float = 0.015       # RMS amplitude (tune per env)
+    SPEECH_MIN_SILENCE_MS: int = 700          # trailing silence to end a phrase
+    SPEECH_MIN_PHRASE_MS: int = 350           # ignore shorter blips
+    SPEECH_MAX_PHRASE_S: float = 8.0          # hard cap per phrase
 
     # Bindings
     BINDING_STORE_PATH: str = "bindings.json"
-    DISPATCH_OVERLAP: str = "drop"  # "drop" | "queue"
+    # "queue" lets a second trigger fired while the first is still executing
+    # wait its turn instead of being silently dropped — much friendlier when
+    # the user repeats the trigger phrase ("hello, hello"). Use "drop" if
+    # you have long-running plans where stacking would be unsafe.
+    DISPATCH_OVERLAP: str = "queue"  # "drop" | "queue"
