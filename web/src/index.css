@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  ::selection {
+    background-color: #111;
+    color: #f5f1ea;
+  }
+  /* Native form resets so sharp corners stay sharp */
+  input,
+  textarea,
+  select,
+  button {
+    border-radius: 0;
+    font-family: inherit;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 2px;
+    background: #1a1a1a;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: #b5572e;
+    margin-top: -6px;
+    border: 1px solid #111111;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 2px;
+    background: #1a1a1a;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: #b5572e;
+    border: 1px solid #111111;
+    border-radius: 0;
+  }
+}
+
+@layer components {
+  .hairline {
+    @apply border border-rule;
+  }
+  .hairline-soft {
+    @apply border border-hair;
+  }
+  .eyebrow {
+    @apply font-sans text-[11px] uppercase tracking-widest2 text-mute;
+  }
+  .display {
+    @apply font-display font-light tracking-tightest;
+  }
+  .btn-primary {
+    @apply hairline bg-ink text-cream px-5 py-2.5 text-sm font-medium tracking-wide
+           transition-colors hover:bg-graphite disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply hairline bg-transparent text-ink px-5 py-2.5 text-sm font-medium tracking-wide
+           transition-colors hover:bg-ink hover:text-cream
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-link {
+    @apply text-sm text-graphite underline-offset-4 hover:underline disabled:opacity-40;
+  }
+  .field {
+    @apply hairline bg-paper px-3 py-2 text-sm text-ink placeholder:text-mute
+           focus:outline-none focus:bg-cream focus:ring-0;
+  }
+}

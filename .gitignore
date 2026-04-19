@@ -26,6 +26,8 @@ htmlcov/
 node_modules/
 web/dist/
 web/.env
+web/tsconfig.tsbuildinfo
+web/*.tsbuildinfo
 
 # Runtime state
 bindings.json

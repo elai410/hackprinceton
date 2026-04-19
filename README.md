@@ -24,12 +24,22 @@ Verify: `curl http://localhost:8000/health`
 
 ### 2. Web client
 
+A bright, editorial React + Tailwind interface (sharp corners, serif display +
+Inter, inspired by [mersi-architecture.com](https://www.mersi-architecture.com)).
+
 ```bash
 cd web
-echo "VITE_COMPANION_URL=http://127.0.0.1:8000" > .env
+cp .env.example .env       # VITE_COMPANION_URL=http://127.0.0.1:8000
 npm install
-npm run dev    # → http://127.0.0.1:5173
+npm run dev                # → http://127.0.0.1:5173
 ```
+
+Flow: describe a behavior on the **left**, the planner shows its reasoning, you
+verify and edit the workflow blocks on the **right**, then **Run** — blocks
+light up as they execute. Use **Dry run** to preview without moving the arm.
+
+The frontend calls `GET /health`, `GET /manifest`, `POST /plan`, and
+`POST /execute`. It uses the Web Speech API for voice input where supported.
 
 ### 3. Real arm (Phase C)
 

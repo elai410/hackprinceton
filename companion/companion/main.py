@@ -20,7 +20,7 @@ from companion.bindings.dispatcher import BindingDispatcher
 from companion.bindings.store import BindingStore
 from companion.inputs import get_input_adapters
 from companion.models import InputEvent, Manifest
-from companion.routes import bindings, events, execute, fallback, health, plan
+from companion.routes import bindings, events, execute, fallback, health, manifest, plan
 from companion.settings import Settings
 
 logging.basicConfig(
@@ -133,6 +133,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health.router)
+    app.include_router(manifest.router)
     app.include_router(plan.router)
     app.include_router(execute.router)
     app.include_router(fallback.router)
