@@ -69,16 +69,43 @@ def _model_list(settings: Settings) -> list[tuple[str, str, str, str]]:
     return entries
 
 
+def _extract_json(text: str) -> str:
+    """Find the outermost valid JSON object in text by trying each '{' from right to left."""
+    end = text.rfind("}")
+    if end == -1:
+        return text
+    pos = 0
+    candidates = []
+    while True:
+        idx = text.find("{", pos)
+        if idx == -1:
+            break
+        candidates.append(idx)
+        pos = idx + 1
+    for start in reversed(candidates):
+        candidate = text[start:end + 1]
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError:
+            continue
+    return text
+
+
 def _strip_fences(text: str) -> str:
-    """Remove markdown code fences that models sometimes add despite instructions."""
-    text = text.strip()
+    """Extract the JSON object from model output, stripping think blocks and fences."""
+    import re
+    # Remove <think>...</think> blocks (K2-Think, DeepSeek-R1, etc.)
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    # Strip markdown code fences
     if text.startswith("```"):
         lines = text.split("\n")
-        lines = lines[1:]  # remove opening fence line
+        lines = lines[1:]
         if lines and lines[-1].strip().startswith("```"):
             lines = lines[:-1]
         text = "\n".join(lines).strip()
-    return text
+    # Extract outermost valid JSON object (handles preamble reasoning text)
+    return _extract_json(text)
 
 
 async def _call_llm(
