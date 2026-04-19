@@ -32,6 +32,9 @@ web/*.tsbuildinfo
 # Runtime state
 bindings.json
 
+# Local smoke / debug logs
+.smoke-logs/
+
 # macOS
 .DS_Store
 

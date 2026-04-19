@@ -54,11 +54,16 @@ export default function App() {
         </main>
       )}
 
-      <footer className="border-t border-rule bg-sand px-8 py-4 flex items-center justify-between text-[11px] uppercase tracking-widest2 text-graphite">
+      <footer className="border-t border-rule bg-sand px-8 py-4 flex items-center justify-between gap-6 text-[11px] uppercase tracking-widest2 text-graphite">
         <span>
-          Rewire <span className="text-clay">●</span> Princeton 2026
+          ReWire <span className="text-clay">●</span> Princeton 2026
         </span>
-        <span className="text-plum">Compose &middot; Verify &middot; Run</span>
+        <span className="flex flex-col items-end gap-0.5 text-right">
+          <span className="text-plum">The integration layer for robotics.</span>
+          <span className="text-[9px] normal-case tracking-normal text-graphite/70 italic">
+            Inspired by Rocky from Project Hail Mary.
+          </span>
+        </span>
       </footer>
     </div>
   );

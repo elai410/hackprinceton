@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   Plan,
+  PriorTurn,
   RecentEvent,
   RecentFire,
   SkillCall,
@@ -32,6 +33,19 @@ interface StepUiState {
   status: StepStatus;
   detail: string;
 }
+
+export interface TriggerActivity {
+  id: string;
+  // armed: user activated a binding; the trigger is now listening.
+  // fired: a binding fired and ran cleanly.
+  // fired_failed: a binding fired but at least one step failed.
+  // disarmed: user stopped listening.
+  kind: "armed" | "fired" | "fired_failed" | "disarmed";
+  text: string;
+  timestamp: number;
+}
+
+const MAX_TRIGGER_ACTIVITY = 50;
 
 interface StoreState {
   sessionId: string;
@@ -68,6 +82,17 @@ interface StoreState {
   // by LiveTranscript to distinguish "still connecting" from "no events yet".
   eventsConnected: boolean;
 
+  // Structured planner history shipped with every /plan request so the
+  // model can edit the most recent plan instead of re-deriving from the
+  // new instruction alone. Only turns that produced a real plan are kept;
+  // clarification rounds collapse into one entry per round.
+  planHistory: PriorTurn[];
+
+  // Lifecycle log for the currently-armed binding (and recent past arms):
+  // "armed", each "fired", "disarmed". Lives in a dedicated panel so the
+  // chat doesn't inflate on every fire. Bounded ring buffer.
+  triggerActivity: TriggerActivity[];
+
   // ---- actions
   pushTurn: (turn: Omit<Turn, "id" | "timestamp">) => void;
   setPhase: (phase: Phase) => void;
@@ -88,6 +113,10 @@ interface StoreState {
   pushRecentEvent: (event: RecentEvent) => void;
   pushRecentFire: (fire: RecentFire) => void;
   setEventsConnected: (connected: boolean) => void;
+  appendPlanHistory: (turn: PriorTurn) => void;
+  resetPlanHistory: () => void;
+  pushTriggerActivity: (entry: Omit<TriggerActivity, "id" | "timestamp">) => void;
+  clearTriggerActivity: () => void;
   reset: () => void;
 }
 
@@ -113,6 +142,8 @@ export const useStore = create<StoreState>((set) => ({
   recentEvents: [],
   recentFires: [],
   eventsConnected: false,
+  planHistory: [],
+  triggerActivity: [],
 
   pushTurn: (turn) =>
     set((s) => ({
@@ -228,6 +259,25 @@ export const useStore = create<StoreState>((set) => ({
 
   setEventsConnected: (eventsConnected) => set({ eventsConnected }),
 
+  appendPlanHistory: (turn) =>
+    set((s) => ({ planHistory: [...s.planHistory, turn] })),
+
+  resetPlanHistory: () => set({ planHistory: [] }),
+
+  pushTriggerActivity: (entry) =>
+    set((s) => {
+      const next: TriggerActivity[] = [
+        ...s.triggerActivity,
+        { ...entry, id: uid(), timestamp: Date.now() },
+      ];
+      if (next.length > MAX_TRIGGER_ACTIVITY) {
+        next.splice(0, next.length - MAX_TRIGGER_ACTIVITY);
+      }
+      return { triggerActivity: next };
+    }),
+
+  clearTriggerActivity: () => set({ triggerActivity: [] }),
+
   reset: () =>
     set({
       phase: "idle",
@@ -240,6 +290,8 @@ export const useStore = create<StoreState>((set) => ({
       activeBindingId: null,
       modelUsed: null,
       errorMsg: null,
+      planHistory: [],
+      triggerActivity: [],
     }),
 }));
 

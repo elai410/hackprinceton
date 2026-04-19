@@ -8,6 +8,7 @@ import BlockList from "./BlockList";
 import EmptyWorkflow from "./EmptyWorkflow";
 import AddStepButton from "./AddStepButton";
 import LiveTranscript from "./LiveTranscript";
+import TriggerActivity from "./TriggerActivity";
 
 interface Props {
   manifest: Manifest | null;
@@ -31,6 +32,7 @@ export default function WorkflowPane({ manifest }: Props) {
     patchStepState,
     setActiveBindingId,
     pushTurn,
+    pushTriggerActivity,
     setError,
   } = useStore();
 
@@ -146,9 +148,8 @@ export default function WorkflowPane({ manifest }: Props) {
       if (plan) {
         setStepStates(plan.steps.map(() => ({ status: "pending", detail: "" })));
       }
-      pushTurn({
-        role: "assistant",
-        kind: "summary",
+      pushTriggerActivity({
+        kind: "armed",
         text: `Listening. The arm will run this whenever ${describeTrigger(binding.trigger)}.`,
       });
     },
@@ -181,9 +182,8 @@ export default function WorkflowPane({ manifest }: Props) {
       // Cancel any pending fire-animation timers so step states freeze.
       fireTimers.current.forEach((id) => window.clearTimeout(id));
       fireTimers.current = [];
-      pushTurn({
-        role: "assistant",
-        kind: "summary",
+      pushTriggerActivity({
+        kind: "disarmed",
         text: "Stopped listening. The trigger is no longer armed.",
       });
     },
@@ -238,9 +238,8 @@ export default function WorkflowPane({ manifest }: Props) {
     );
     fireTimers.current.push(finishId);
 
-    pushTurn({
-      role: "assistant",
-      kind: "summary",
+    pushTriggerActivity({
+      kind: latest.ok ? "fired" : "fired_failed",
       text: latest.ok
         ? `Triggered — ran ${steps.length} step${steps.length === 1 ? "" : "s"}.`
         : `Triggered — failed: ${latest.detail || "see log"}.`,
@@ -337,14 +336,18 @@ export default function WorkflowPane({ manifest }: Props) {
         )}
       </div>
 
-      {/* Live transcription / activity feed — only shown when a trigger is in
-          play, since that's when the user wants to confirm the mic is alive. */}
+      {/* Trigger activity log + live transcript — only shown when a trigger is
+          in play. Activity panel renders nothing when empty, so the workflow
+          column stays calm before the first arm. */}
       {hasPlan && hasTrigger && suggestedTrigger && (
-        <LiveTranscript
-          trigger={suggestedTrigger}
-          isArmed={isArmed}
-          isToggling={isArming || isDisarming}
-        />
+        <>
+          <TriggerActivity />
+          <LiveTranscript
+            trigger={suggestedTrigger}
+            isArmed={isArmed}
+            isToggling={isArming || isDisarming}
+          />
+        </>
       )}
 
       {/* Big sticky CTA — context-sensitive: Activate when a trigger was

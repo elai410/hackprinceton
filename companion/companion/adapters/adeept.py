@@ -14,8 +14,15 @@ Wire format notes:
   must wait ~2s and flush the input buffer before the first command.
 
 Concurrency: `/execute` runs sync in FastAPI's threadpool while the binding
-dispatcher invokes the adapter via `asyncio.to_thread`. The serial port is
-not thread-safe, so every wire write is wrapped in `self._lock`.
+dispatcher invokes the adapter via `asyncio.to_thread`. Two locks cooperate:
+  * `self._lock` is wire-atomic — held for a single `WriteFile` so pyserial's
+    overlapped-I/O state can't be clobbered by a second thread.
+  * `self._skill_lock` serializes whole skills. `_move_to` sleeps between
+    interpolation ticks, and if two plans raced inside that sleep we'd
+    interleave servo_write commands to the Arduino AND re-enter pyserial's
+    overlapped write path fast enough to get `WriteFile -> ERROR_ACCESS_DENIED`.
+    Wrapping `_dispatch` in `_skill_lock` makes each skill (and its whole
+    interpolation envelope) atomic.
 
 The `RobotAdapter` Protocol contract (see `companion/adapters/base.py`)
 requires that `execute_skill_call` MUST NOT raise — every code path returns
@@ -69,6 +76,7 @@ class AdeeptAdapter:
             )
         self._manifest_id = manifest_id
         self._lock = threading.Lock()
+        self._skill_lock = threading.Lock()
         self._cur: Optional[list[int]] = None
         self._oled_ready = False
         self._max_speed: float = float(settings.ADEEPT_MAX_SPEED_DEG_S)
@@ -187,7 +195,9 @@ class AdeeptAdapter:
     def execute_skill_call(self, call: SkillCall) -> StepResult:
         started_at = datetime.now(timezone.utc).isoformat()
         try:
-            self._dispatch(call)
+            # Serialize whole skills against the port; see module docstring.
+            with self._skill_lock:
+                self._dispatch(call)
             status = "completed"
             detail = f"adeept: {call.skill_id} {call.arguments}"
         except Exception as exc:
@@ -235,13 +245,15 @@ class AdeeptAdapter:
             self._move_to(cur)
 
         elif sid == "grip_open":
-            cur[4] = 100
+            # Servo on this unit is installed such that a lower angle = open;
+            # the full-open stop sits at the bottom of the clamped range.
+            cur[4] = 30
             self._move_to(cur)
 
         elif sid == "grip_close":
             f = int(args.get("force_pct", 50))
-            # Higher force_pct -> tighter grip -> smaller angle (65 -> 30 over 10..100).
-            cur[4] = int(round(65 - (f - 10) * (65 - 30) / 90))
+            # Higher force_pct -> tighter grip -> larger angle (65 -> 100 over 10..100).
+            cur[4] = int(round(65 + (f - 10) * (100 - 65) / 90))
             self._move_to(cur)
 
         elif sid == "wave":

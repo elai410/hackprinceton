@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from datetime import datetime, timezone
 
 from companion.models import InputEvent
@@ -53,29 +54,58 @@ class KeyboardInputAdapter:
     def _run(self) -> None:
         try:
             from pynput import keyboard
+        except ImportError:
+            logger.warning(
+                "pynput not installed; KeyboardInputAdapter disabled. pip install pynput"
+            )
+            return
 
-            def on_press(key: object) -> bool | None:
+        def on_press(key: object) -> bool | None:
+            # Bullet-proof: ANY exception inside this callback would otherwise
+            # propagate up through pynput's listener thread and silently kill
+            # the tap, which is exactly the bug we're hunting (one stray key
+            # breaks every subsequent press). Catch everything, log, drop.
+            try:
                 if self._stop_event.is_set():
                     return False  # stops the listener
+                raw = repr(key)
                 key_str = self._normalise_key(key)
+                logger.debug("key press: raw=%s normalised=%r", raw, key_str)
                 event = InputEvent(
                     type="key",
                     payload={"key": key_str, "action": "press"},
                     timestamp=datetime.now(timezone.utc).isoformat(),
                 )
-                if self._loop is not None and self._queue is not None:
-                    asyncio.run_coroutine_threadsafe(
-                        self._queue.put(event), self._loop
-                    )
+                loop = self._loop
+                queue = self._queue
+                if loop is None or queue is None:
+                    return None
+                if loop.is_closed():
+                    return None
+                asyncio.run_coroutine_threadsafe(queue.put(event), loop)
+                return None
+            except Exception as exc:  # noqa: BLE001 — listener must never die
+                logger.warning("keyboard on_press swallowed error: %s", exc)
                 return None
 
-            with keyboard.Listener(on_press=on_press) as listener:
-                listener.join()
-
-        except ImportError:
-            logger.warning("pynput not installed; KeyboardInputAdapter disabled. pip install pynput")
-        except Exception as exc:
-            logger.error(f"KeyboardInputAdapter error: {exc}")
+        # Supervisor loop: even if pynput's tap dies for any reason
+        # (transient OS hiccup, weird key object, etc.), relaunch the
+        # listener so the user doesn't have to restart the companion.
+        # The _stop_event check at the top of each iteration still gives
+        # us a clean shutdown path.
+        while not self._stop_event.is_set():
+            try:
+                with keyboard.Listener(on_press=on_press) as listener:
+                    listener.join()
+            except Exception as exc:  # noqa: BLE001
+                logger.error("keyboard listener died: %s; restarting in 1s", exc)
+                time.sleep(1.0)
+            else:
+                # Listener returned cleanly. If we weren't asked to stop,
+                # restart it after a short pause to avoid a hot loop.
+                if not self._stop_event.is_set():
+                    logger.info("keyboard listener exited unexpectedly; restarting")
+                    time.sleep(0.25)
 
     @staticmethod
     def _normalise_key(key: object) -> str:

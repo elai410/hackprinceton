@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { useStore } from "../../state/store";
 import type { RecentEvent, TriggerPattern } from "../../types";
@@ -25,6 +25,11 @@ export default function LiveTranscript({ trigger, isArmed, isToggling }: Props) 
   const allEvents = useStore((s) => s.recentEvents);
   const connected = useStore((s) => s.eventsConnected);
 
+  // Collapsed by default — the transcript is mostly a debugging affordance,
+  // and keeping it folded gives the workflow blocks above more breathing room.
+  const [expanded, setExpanded] = useState(false);
+  const bodyId = useId();
+
   // Only show events whose type matches the trigger we care about. Other
   // event types (key, clap) still arrive in the store but they shouldn't
   // pollute the transcript view.
@@ -35,6 +40,28 @@ export default function LiveTranscript({ trigger, isArmed, isToggling }: Props) 
 
   const keyword = useMemo(() => extractKeyword(trigger), [trigger]);
   const lastEventId = visible.length > 0 ? visible[visible.length - 1].id : null;
+
+  // Auto-expand exactly once per arm-cycle the first time we see a match,
+  // so the user gets visual confirmation the trigger fired even if they
+  // hadn't opened the transcript. Reset the latch when the binding is
+  // disarmed so the next arm-cycle gets the same one-shot behaviour.
+  const autoExpandedThisCycle = useRef(false);
+  useEffect(() => {
+    if (!isArmed) {
+      autoExpandedThisCycle.current = false;
+      return;
+    }
+    if (autoExpandedThisCycle.current) return;
+    if (!keyword) return;
+    const lastEvent = visible[visible.length - 1];
+    if (!lastEvent) return;
+    const text = String(lastEvent.payload.text ?? lastEvent.payload.normalized ?? "");
+    const normalized = String(lastEvent.payload.normalized ?? text).toLowerCase();
+    if (normalized.includes(keyword.toLowerCase())) {
+      autoExpandedThisCycle.current = true;
+      setExpanded(true);
+    }
+  }, [visible, keyword, isArmed]);
 
   // Header status — three states, decided in priority order.
   let statusLabel: string;
@@ -56,8 +83,17 @@ export default function LiveTranscript({ trigger, isArmed, isToggling }: Props) 
   return (
     <div className="mx-8 mb-3">
       <div className="hairline-soft bg-paper">
-        {/* Header row */}
-        <div className="px-4 py-2 flex items-center justify-between border-b border-hair">
+        {/* Header row — also the toggle. Status dot + label remain visible
+            when collapsed so the user always sees whether listening is on. */}
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-controls={bodyId}
+          className={`w-full px-4 py-2 flex items-center justify-between text-left ${
+            expanded ? "border-b border-hair" : ""
+          } focus:outline-none focus-visible:ring-2 focus-visible:ring-sand`}
+        >
           <div className="flex items-center gap-2.5">
             <span className="relative inline-flex w-2 h-2">
               {statusTone === "active" && (
@@ -80,19 +116,23 @@ export default function LiveTranscript({ trigger, isArmed, isToggling }: Props) 
             >
               {statusLabel}
             </span>
-            {keyword && (
+            {keyword && isArmed && (
               <span className="font-mono text-[11px] text-graphite">
-                {isArmed ? "waiting for" : "will wait for"} &ldquo;{keyword}&rdquo;
+                listening for &ldquo;{keyword}&rdquo;
               </span>
             )}
           </div>
-          <span className="font-mono text-[10px] text-mute">
-            {connected ? "live · push" : "—"}
+          <span className="flex items-center gap-2">
+            <span className="font-mono text-[10px] text-mute">
+              {connected ? "live · push" : "—"}
+            </span>
+            <Chevron open={expanded} />
           </span>
-        </div>
+        </button>
 
         {/* Body */}
-        <div className="px-4 py-3 min-h-[68px]">
+        {expanded && (
+        <div id={bodyId} className="px-4 py-3 min-h-[68px]">
           {!connected && (
             <p className="text-[12px] text-mute">
               Trying to reach the companion event stream…
@@ -128,8 +168,30 @@ export default function LiveTranscript({ trigger, isArmed, isToggling }: Props) 
             </ul>
           )}
         </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      aria-hidden
+      className={`text-mute transition-transform duration-150 ${open ? "rotate-90" : ""}`}
+    >
+      <path
+        d="M3 1.5 L7 5 L3 8.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

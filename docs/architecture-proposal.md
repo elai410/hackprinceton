@@ -1,4 +1,4 @@
-# Rewire — Architecture Proposal
+# ReWire — Architecture Proposal
 
 ## 1. Repository Structure
 

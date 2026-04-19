@@ -1,6 +1,12 @@
-# Rewire
+# ReWire
 
-Natural language robot control for the Adeept 5 DOF arm. Describe what you want in plain English; K2 reasons about it and configures the arm.
+**Reprogram the physical world with natural language.**
+
+ReWire is the AI-native control layer for consumer robotics. Describe a behavior in plain English ("when you hear good night, tuck in for the night"), and a reasoning model composes the routine, explains it back, and runs it locally on your robot. Wire any input — voice, keystroke, sensor — to any robot's capabilities. No SDK. No firmware. Just language.
+
+Think *Zapier for the physical world*: a single integration layer that turns the long tail of programmable robots into something anyone can customize.
+
+*Cultural footnote: inspired by Rocky from Andy Weir's Project Hail Mary — the alien who became a best friend through nothing but patient communication. We think every robot deserves a translator.*
 
 ## Quick start
 
@@ -99,7 +105,7 @@ mock adapter so the rest of the stack still boots.
 
 ## Inputs (triggers)
 
-Rewire decouples *what triggers an action* from *what device hosts the trigger*.
+ReWire decouples *what triggers an action* from *what device hosts the trigger*.
 Any number of input adapters can run side-by-side; each emits `InputEvent`s
 into a shared queue, the **BindingDispatcher** matches them against stored
 bindings, and the matching plan is validated and run on the robot.

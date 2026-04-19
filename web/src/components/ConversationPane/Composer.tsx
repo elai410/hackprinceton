@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import MicButton from "./MicButton";
 
 interface Props {
   onSubmit: (text: string) => void;
@@ -62,20 +61,14 @@ export default function Composer({
             <kbd className="font-mono">Enter</kbd> to send ·{" "}
             <kbd className="font-mono">Shift+Enter</kbd> for newline
           </span>
-          <div className="flex items-center gap-2">
-            <MicButton
-              disabled={disabled}
-              onTranscript={(t) => setText((cur) => (cur ? cur + " " + t : t))}
-            />
-            <button
-              type="button"
-              onClick={submit}
-              disabled={disabled || !text.trim()}
-              className="btn-primary"
-            >
-              Compose &rarr;
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={disabled || !text.trim()}
+            className="btn-primary"
+          >
+            Compose &rarr;
+          </button>
         </div>
       </div>
     );
@@ -94,15 +87,11 @@ export default function Composer({
           disabled={disabled}
           className="w-full bg-paper px-4 py-3 text-[15px] text-ink placeholder:text-mute resize-none focus:outline-none disabled:opacity-50"
         />
-        <div className="flex items-center justify-between px-3 py-2 border-t border-hair">
+        <div className="px-3 py-2 border-t border-hair">
           <span className="text-[11px] text-mute">
             <kbd className="font-mono">Enter</kbd> to send ·{" "}
             <kbd className="font-mono">Shift+Enter</kbd> for newline
           </span>
-          <MicButton
-            disabled={disabled}
-            onTranscript={(t) => setText((cur) => (cur ? cur + " " + t : t))}
-          />
         </div>
       </div>
       <button
